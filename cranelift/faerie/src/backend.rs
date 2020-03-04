@@ -86,7 +86,7 @@ pub struct FaerieBackend {
 
 struct FaerieDebugSink<'a> {
     pub data: &'a mut Vec<u8>,
-    pub functions: &'a [String],
+    pub functions: &'a [(String, FuncId)],
     pub artifact: &'a mut faerie::Artifact,
 }
 
@@ -126,7 +126,7 @@ impl<'a> gimli::write::Writer for FaerieDebugSink<'a> {
                 assert_eq!(eh_pe.format(), DW_EH_PE_sdata4, "faerie backend currently only supports PC-relative 4-byte offsets for DWARF pointers.");
                 assert_eq!(eh_pe.application(), DW_EH_PE_pcrel, "faerie backend currently only supports PC-relative 4-byte offsets for DWARF pointers.");
 
-                let name = self.functions[symbol].as_str();
+                let name = self.functions[symbol].0.as_str();
 
                 let reloc = faerie::artifact::Reloc::Raw {
                     reloc: goblin::elf::reloc::R_X86_64_PC32,
@@ -219,7 +219,7 @@ impl Backend for FaerieBackend {
 
     fn define_function(
         &mut self,
-        _id: FuncId,
+        func_id: FuncId,
         name: &str,
         ctx: &cranelift_codegen::Context,
         namespace: &ModuleNamespace<Self>,
@@ -273,7 +273,7 @@ impl Backend for FaerieBackend {
                 let (cie, mut encoder) = frame_sink.cie_for(&layout.initial);
 
                 let mut fd_entry =
-                    FrameDescriptionEntry::new(frame_sink.address_for(name), code_length);
+                    FrameDescriptionEntry::new(frame_sink.address_for(name, func_id), code_length);
 
                 let mut frame_changes = vec![];
                 for block in ctx.func.layout.blocks() {

@@ -15,6 +15,8 @@ use gimli::write::EhFrame;
 use gimli::write::Error;
 use gimli::write::FrameDescriptionEntry;
 
+use crate::FuncId;
+
 const PC_SDATA4: u8 = DW_EH_PE_pcrel.0 | DW_EH_PE_sdata4.0;
 
 /// FrameSink maintains state for and an interface to construct DWARF frame information for a
@@ -23,7 +25,7 @@ pub struct FrameSink {
     // we need to retain function names to hand out usize identifiers for FDE addresses,
     // which are then used to look up function names again for relocations, when `write_address` is
     // called.
-    fn_names: Vec<String>,
+    fn_names: Vec<(String, FuncId)>,
     table: gimli::write::FrameTable,
     reg_mapper: DwarfRegMapper,
 }
@@ -40,11 +42,11 @@ impl FrameSink {
 
     /// Retrieve `gimli::write::Address` for some function name. Typically necessary in backends
     /// that need to retrieve symbolic addresses.
-    pub fn address_for(&mut self, name: &str) -> Address {
+    pub fn address_for(&mut self, name: &str, func_id: FuncId) -> Address {
         // adding a FrameDescriptionEntry for a function twice would be a bug,
         // so we can confidently expect that `name` will not be provided more than once.
         // So `name` is always new, meaning we can just add it and return its index
-        self.fn_names.push(name.to_string());
+        self.fn_names.push((name.to_string(), func_id));
         Address::Symbol {
             symbol: self.fn_names.len() - 1,
             addend: 0,
@@ -53,7 +55,7 @@ impl FrameSink {
 
     /// Get the list of functions declared into this frame sink in order they were written. This
     /// order must be preserved for `gimli::Address` symbols to refer to the right functions.
-    pub fn fn_names_slice(&self) -> &[String] {
+    pub fn fn_names_slice(&self) -> &[(String, FuncId)] {
         &self.fn_names
     }
 

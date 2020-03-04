@@ -8,8 +8,8 @@ use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
-    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleNamespace,
-    ModuleResult, TrapSite,
+    Backend, DataContext, DataDescription, DataId, FrameSink, FuncId, Init, Linkage,
+    ModuleNamespace, ModuleResult, TrapSite,
 };
 use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
@@ -18,6 +18,9 @@ use object::{RelocationEncoding, RelocationKind, SymbolFlags, SymbolKind, Symbol
 use std::collections::HashMap;
 use std::mem;
 use target_lexicon::{BinaryFormat, PointerWidth};
+
+use gimli::write::{Address, FrameDescriptionEntry};
+use gimli::{DW_EH_PE_pcrel, DW_EH_PE_sdata4};
 
 #[derive(Debug)]
 /// Setting to enable collection of traps. Setting this to `Enabled` in
@@ -85,6 +88,71 @@ pub struct ObjectBackend {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     collect_traps: ObjectTrapCollection,
     function_alignment: u64,
+    frame_sink: Option<FrameSink>,
+}
+
+struct ObjectDebugSink<'a> {
+    pub eh_frame: SectionId,
+    pub data: &'a mut Vec<u8>,
+    pub functions: &'a [(String, FuncId)],
+    pub function_symbols: &'a SecondaryMap<FuncId, Option<SymbolId>>,
+    pub object: &'a mut object::write::Object,
+}
+
+impl<'a> gimli::write::Writer for ObjectDebugSink<'a> {
+    type Endian = gimli::LittleEndian;
+
+    fn endian(&self) -> Self::Endian {
+        gimli::LittleEndian
+    }
+    fn len(&self) -> usize {
+        self.data.len()
+    }
+    fn write(&mut self, bytes: &[u8]) -> gimli::write::Result<()> {
+        self.data.extend_from_slice(bytes);
+        Ok(())
+    }
+
+    fn write_at(&mut self, offset: usize, bytes: &[u8]) -> gimli::write::Result<()> {
+        if offset + bytes.len() > self.data.len() {
+            return Err(gimli::write::Error::LengthOutOfBounds);
+        }
+        self.data[offset..][..bytes.len()].copy_from_slice(bytes);
+        Ok(())
+    }
+
+    fn write_eh_pointer(
+        &mut self,
+        address: Address,
+        eh_pe: gimli::DwEhPe,
+        size: u8,
+    ) -> gimli::write::Result<()> {
+        match address {
+            Address::Constant(val) => self.write_udata(val, size),
+            Address::Symbol { symbol, addend } => {
+                assert_eq!(addend, 0);
+
+                assert_eq!(eh_pe.format(), DW_EH_PE_sdata4, "faerie backend currently only supports PC-relative 4-byte offsets for DWARF pointers.");
+                assert_eq!(eh_pe.application(), DW_EH_PE_pcrel, "faerie backend currently only supports PC-relative 4-byte offsets for DWARF pointers.");
+
+                self.object
+                    .add_relocation(
+                        self.eh_frame,
+                        Relocation {
+                            offset: self.data.len() as u64,
+                            size: 32,
+                            kind: RelocationKind::Relative,
+                            encoding: RelocationEncoding::Generic,
+                            symbol: self.function_symbols[self.functions[symbol].1].unwrap(),
+                            addend: 0,
+                        },
+                    )
+                    .unwrap();
+
+                self.write_udata(0, size)
+            }
+        }
+    }
 }
 
 impl Backend for ObjectBackend {
@@ -105,6 +173,7 @@ impl Backend for ObjectBackend {
         let triple = builder.isa.triple();
         let mut object = Object::new(triple.binary_format, triple.architecture);
         object.add_file_symbol(builder.name);
+        let frame_sink = FrameSink::new(&builder.isa);
         Self {
             isa: builder.isa,
             object,
@@ -116,6 +185,7 @@ impl Backend for ObjectBackend {
             libcall_names: builder.libcall_names,
             collect_traps: builder.collect_traps,
             function_alignment: builder.function_alignment,
+            frame_sink: Some(frame_sink),
         }
     }
 
@@ -184,7 +254,7 @@ impl Backend for ObjectBackend {
     fn define_function(
         &mut self,
         func_id: FuncId,
-        _name: &str,
+        name: &str,
         ctx: &cranelift_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
         code_size: u32,
@@ -194,7 +264,7 @@ impl Backend for ObjectBackend {
         let mut trap_sink = ObjectTrapSink::default();
         let mut stackmap_sink = NullStackmapSink {};
 
-        if let ObjectTrapCollection::Enabled = self.collect_traps {
+        let code_info = if let ObjectTrapCollection::Enabled = self.collect_traps {
             unsafe {
                 ctx.emit_to_memory(
                     &*self.isa,
@@ -203,7 +273,7 @@ impl Backend for ObjectBackend {
                     &mut trap_sink,
                     &mut stackmap_sink,
                 )
-            };
+            }
         } else {
             let mut trap_sink = NullTrapSink {};
             unsafe {
@@ -214,8 +284,8 @@ impl Backend for ObjectBackend {
                     &mut trap_sink,
                     &mut stackmap_sink,
                 )
-            };
-        }
+            }
+        };
 
         let symbol = self.functions[func_id].unwrap();
         let section = self.object.section_id(StandardSection::Text);
@@ -230,6 +300,45 @@ impl Backend for ObjectBackend {
             });
         }
         self.traps[func_id] = trap_sink.sites;
+
+        if let Some(ref mut frame_sink) = self.frame_sink {
+            if let Some(layout) = ctx.func.frame_layout.as_ref() {
+                let (cie, mut encoder) = frame_sink.cie_for(&layout.initial);
+
+                let mut fd_entry =
+                    FrameDescriptionEntry::new(frame_sink.address_for(name, func_id), code_info.code_size);
+
+                let mut frame_changes = vec![];
+                for block in ctx.func.layout.blocks() {
+                    for (offset, inst, size) in
+                        ctx.func.inst_offsets(block, &self.isa.encoding_info())
+                    {
+                        if let Some(changes) = layout.instructions.get(&inst) {
+                            for change in changes.iter() {
+                                frame_changes.push((offset + size, change.clone()));
+                            }
+                        }
+                    }
+                }
+
+                frame_changes.sort_by(|a, b| a.0.cmp(&b.0));
+
+                let fde_insts = frame_changes
+                    .into_iter()
+                    .flat_map(|(addr, change)| encoder.translate(&change).map(|inst| (addr, inst)));
+
+                for (addr, inst) in fde_insts.into_iter() {
+                    fd_entry.add_instruction(addr, inst);
+                }
+
+                frame_sink.add_fde(cie, fd_entry);
+            } else {
+                // we have a frame sink to write .eh_frames into, but are not collecting debug
+                // information for at least the current function. This might be a bug in the code
+                // using cranelift/faerie?
+            }
+        }
+
         Ok(ObjectCompiledFunction)
     }
 
@@ -381,7 +490,22 @@ impl Backend for ObjectBackend {
     }
 
     fn publish(&mut self) {
-        // Nothing to do.
+        if let Some(ref mut frame_sink) = self.frame_sink {
+            let eh_frame = self.object.add_section(b"".to_vec(), b".eh_frame".to_vec(), object::SectionKind::Unknown);
+
+            let mut eh_frame_bytes = Vec::new();
+
+            let mut eh_frame_writer = gimli::write::EhFrame(ObjectDebugSink {
+                eh_frame,
+                data: &mut eh_frame_bytes,
+                functions: frame_sink.fn_names_slice(),
+                function_symbols: &self.functions,
+                object: &mut self.object,
+            });
+            frame_sink.write_to(&mut eh_frame_writer).unwrap();
+
+            self.object.append_section_data(eh_frame, &eh_frame_bytes, 8);
+        }
     }
 
     fn finish(mut self, namespace: &ModuleNamespace<Self>) -> ObjectProduct {
