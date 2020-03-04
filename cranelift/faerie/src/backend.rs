@@ -276,9 +276,9 @@ impl Backend for FaerieBackend {
                     FrameDescriptionEntry::new(frame_sink.address_for(name), code_length);
 
                 let mut frame_changes = vec![];
-                for ebb in ctx.func.layout.ebbs() {
+                for block in ctx.func.layout.blocks() {
                     for (offset, inst, size) in
-                        ctx.func.inst_offsets(ebb, &self.isa.encoding_info())
+                        ctx.func.inst_offsets(block, &self.isa.encoding_info())
                     {
                         if let Some(changes) = layout.instructions.get(&inst) {
                             for change in changes.iter() {
