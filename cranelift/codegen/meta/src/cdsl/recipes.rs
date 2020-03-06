@@ -130,6 +130,9 @@ pub(crate) struct EncodingRecipe {
     /// This instruction clobbers `iflags` and `fflags`; true by default.
     pub clobbers_flags: bool,
 
+    /// This instruction clobbers all registers; false by default.
+    pub clobbers_all: bool,
+
     /// Instruction predicate.
     pub inst_predicate: Option<InstructionPredicate>,
 
@@ -150,6 +153,7 @@ impl PartialEq for EncodingRecipe {
             && self.compute_size == other.compute_size
             && self.branch_range == other.branch_range
             && self.clobbers_flags == other.clobbers_flags
+            && self.clobbers_all == other.clobbers_all
             && self.inst_predicate == other.inst_predicate
             && self.isa_predicate == other.isa_predicate
             && self.emit == other.emit
@@ -176,6 +180,7 @@ pub(crate) struct EncodingRecipeBuilder {
     pub branch_range: Option<BranchRange>,
     pub emit: Option<String>,
     clobbers_flags: Option<bool>,
+    clobbers_all: Option<bool>,
     inst_predicate: Option<InstructionPredicate>,
     isa_predicate: Option<SettingPredicateNumber>,
 }
@@ -192,6 +197,7 @@ impl EncodingRecipeBuilder {
             branch_range: None,
             emit: None,
             clobbers_flags: None,
+            clobbers_all: None,
             inst_predicate: None,
             isa_predicate: None,
         }
@@ -221,6 +227,11 @@ impl EncodingRecipeBuilder {
     pub fn clobbers_flags(mut self, flag: bool) -> Self {
         assert!(self.clobbers_flags.is_none());
         self.clobbers_flags = Some(flag);
+        self
+    }
+    pub fn clobbers_all(mut self, flag: bool) -> Self {
+        assert!(self.clobbers_all.is_none());
+        self.clobbers_all = Some(flag);
         self
     }
     pub fn emit(mut self, code: impl Into<String>) -> Self {
@@ -280,6 +291,7 @@ impl EncodingRecipeBuilder {
         };
 
         let clobbers_flags = self.clobbers_flags.unwrap_or(true);
+        let clobbers_all = self.clobbers_all.unwrap_or(false);
 
         EncodingRecipe {
             name: self.name,
@@ -290,6 +302,7 @@ impl EncodingRecipeBuilder {
             compute_size,
             branch_range: self.branch_range,
             clobbers_flags,
+            clobbers_all,
             inst_predicate: self.inst_predicate,
             isa_predicate: self.isa_predicate,
             emit: self.emit,

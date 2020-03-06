@@ -2363,36 +2363,41 @@ pub(crate) fn define<'shared>(
     // Call/return.
 
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("call_id", &formats.call, 4).emit(
-            r#"
-            sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
-            {{PUT_OP}}(bits, BASE_REX, sink);
-            // The addend adjusts for the difference between the end of the
-            // instruction and the beginning of the immediate field.
-            sink.reloc_external(Reloc::X86CallPCRel4,
-                                &func.dfg.ext_funcs[func_ref].name,
-                                -4);
-            sink.put4(0);
-        "#,
-        ),
+        EncodingRecipeBuilder::new("call_id", &formats.call, 4)
+            .clobbers_all(true)
+            .emit(
+                r#"
+                sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
+                {{PUT_OP}}(bits, BASE_REX, sink);
+                // The addend adjusts for the difference between the end of the
+                // instruction and the beginning of the immediate field.
+                sink.reloc_external(Reloc::X86CallPCRel4,
+                                    &func.dfg.ext_funcs[func_ref].name,
+                                    -4);
+                sink.put4(0);
+            "#,
+            ),
     );
 
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("call_plt_id", &formats.call, 4).emit(
-            r#"
-            sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
-            {{PUT_OP}}(bits, BASE_REX, sink);
-            sink.reloc_external(Reloc::X86CallPLTRel4,
-                                &func.dfg.ext_funcs[func_ref].name,
-                                -4);
-            sink.put4(0);
-        "#,
-        ),
+        EncodingRecipeBuilder::new("call_plt_id", &formats.call, 4)
+            .clobbers_all(true)
+            .emit(
+                r#"
+                sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
+                {{PUT_OP}}(bits, BASE_REX, sink);
+                sink.reloc_external(Reloc::X86CallPLTRel4,
+                                    &func.dfg.ext_funcs[func_ref].name,
+                                    -4);
+                sink.put4(0);
+            "#,
+            ),
     );
 
     recipes.add_template_recipe(
         EncodingRecipeBuilder::new("call_r", &formats.call_indirect, 1)
             .operands_in(vec![gpr])
+            .clobbers_all(true)
             .emit(
                 r#"
                     sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
@@ -3271,6 +3276,7 @@ pub(crate) fn define<'shared>(
         EncodingRecipeBuilder::new("elf_tls_get_addr", &formats.unary_global_value, 16)
             // FIXME Correct encoding for non rax registers
             .operands_out(vec![reg_rax])
+            .clobbers_all(true)
             .emit(
                 r#"
                     // output %rax
@@ -3306,6 +3312,7 @@ pub(crate) fn define<'shared>(
         EncodingRecipeBuilder::new("macho_tls_get_addr", &formats.unary_global_value, 9)
             // FIXME Correct encoding for non rax registers
             .operands_out(vec![reg_rax])
+            .clobbers_all(true)
             .emit(
                 r#"
                     // output %rax

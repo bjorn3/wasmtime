@@ -118,6 +118,11 @@ pub struct RecipeConstraints {
     ///
     /// When true, SSA values of type `iflags` or `fflags` can not be live across the instruction.
     pub clobbers_flags: bool,
+
+    /// Does this instruction clobber all registers?
+    ///
+    /// When true, all SSA values are spilled across the instruction.
+    pub clobbers_all: bool,
 }
 
 impl RecipeConstraints {

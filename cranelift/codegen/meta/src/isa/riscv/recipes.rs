@@ -140,6 +140,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
     recipes.push(
         EncodingRecipeBuilder::new("Icall", &formats.call_indirect, 4)
             .operands_in(vec![gpr])
+            .clobbers_all(true)
             .emit(
                 r#"
                     // call_indirect instructions are jalr with rd=%x1.
@@ -203,15 +204,19 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
             ),
     );
 
-    recipes.push(EncodingRecipeBuilder::new("UJcall", &formats.call, 4).emit(
-        r#"
-                    sink.reloc_external(Reloc::RiscvCall,
-                                        &func.dfg.ext_funcs[func_ref].name,
-                                        0);
-                    // rd=%x1 is the standard link register.
-                    put_uj(bits, 0, 1, sink);
-                "#,
-    ));
+    recipes.push(
+        EncodingRecipeBuilder::new("UJcall", &formats.call, 4)
+        .clobbers_all(true)
+        .emit(
+            r#"
+                sink.reloc_external(Reloc::RiscvCall,
+                                    &func.dfg.ext_funcs[func_ref].name,
+                                    0);
+                // rd=%x1 is the standard link register.
+                put_uj(bits, 0, 1, sink);
+            "#,
+        )
+    );
 
     // SB-type branch instructions.
     recipes.push(

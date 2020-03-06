@@ -463,6 +463,15 @@ fn emit_recipe_constraints(isa: &TargetIsa, fmt: &mut Formatter) {
                         "false"
                     }
                 );
+                fmtln!(
+                    fmt,
+                    "clobbers_all: {},",
+                    if recipe.clobbers_all {
+                        "true"
+                    } else {
+                        "false"
+                    }
+                );
             });
             fmt.line("},");
         }

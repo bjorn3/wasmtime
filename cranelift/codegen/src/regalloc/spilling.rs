@@ -264,13 +264,11 @@ impl<'a> Context<'a> {
         // Remove kills from the pressure tracker.
         self.free_regs(kills);
 
-        // If inst is a call, spill all register values that are live across the call.
+        // If necessary spill all register values that are live across the instruction. (eg a call)
         // This means that we don't currently take advantage of callee-saved registers.
         // TODO: Be more sophisticated.
-        let opcode = self.cur.func.dfg[inst].opcode();
-        if call_sig.is_some()
-            || opcode == crate::ir::Opcode::X86ElfTlsGetAddr
-            || opcode == crate::ir::Opcode::X86MachoTlsGetAddr
+        if constraints
+            .map_or(false, |constraints| constraints.clobbers_all)
         {
             for lv in throughs {
                 if lv.affinity.is_reg() && !self.spills.contains(&lv.value) {
