@@ -27,7 +27,7 @@ pub struct ValueLocRange {
 /// Resulting map of Value labels and their ranges/locations.
 pub type ValueLabelsRanges = HashMap<ValueLabel, Vec<ValueLocRange>>;
 
-fn build_value_labels_index<T>(func: &Function) -> BTreeMap<T, (Value, ValueLabel)>
+fn build_value_labels_index<T>(func: &Function) -> BTreeMap<T, Vec<(Value, ValueLabel)>>
 where
     T: From<SourceLoc> + Deref<Target = SourceLoc> + Ord + Copy,
 {
@@ -46,8 +46,10 @@ where
                         continue;
                     }
                     let srcloc = T::from(label.from);
-                    let label = label.label;
-                    sorted.insert(srcloc, (*val, label));
+                    sorted
+                        .entry(srcloc)
+                        .or_insert_with(Vec::new)
+                        .push((*val, label.label));
                 }
             }
             ValueLabelAssignments::Alias { from, value } => {
@@ -71,8 +73,10 @@ where
                         } else {
                             from.max(T::from(label.from))
                         };
-                        let label = label.label;
-                        sorted.insert(srcloc, (*val, label));
+                        sorted
+                            .entry(srcloc)
+                            .or_insert_with(Vec::new)
+                            .push((*val, label.label));
                     }
                 }
             }
@@ -169,8 +173,8 @@ where
                 },
                 Included(srcloc),
             );
-            let active_values = values_labels.range(range);
-            let active_values = active_values.filter(|(_, (v, _))| {
+            let active_values = values_labels.range(range).flat_map(|(_, values)| values);
+            let active_values = active_values.filter(|(v, _)| {
                 // Ignore dead/inactive Values.
                 let range = liveness_ranges.get(*v);
                 match range {
@@ -179,7 +183,7 @@ where
                 }
             });
             // Append new Values to the tracked_values.
-            for (_, (val, label)) in active_values {
+            for (val, label) in active_values {
                 let loc = divert.get(*val, values_locations);
                 tracked_values.push((*val, *label, end_offset, loc));
             }
