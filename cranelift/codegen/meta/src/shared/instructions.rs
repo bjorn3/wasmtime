@@ -535,9 +535,9 @@ fn define_simd_lane_access(
             r#"
         Vector swizzle.
 
-        Returns a new vector with byte-width lanes selected from the lanes of the first input 
-        vector ``x`` specified in the second input vector ``s``. The indices ``i`` in range 
-        ``[0, 15]`` select the ``i``-th element of ``x``. For indices outside of the range the 
+        Returns a new vector with byte-width lanes selected from the lanes of the first input
+        vector ``x`` specified in the second input vector ``s``. The indices ``i`` in range
+        ``[0, 15]`` select the ``i``-th element of ``x``. For indices outside of the range the
         resulting lane is 0. Note that this operates on byte-width lanes.
         "#,
             &formats.binary,
@@ -762,14 +762,7 @@ pub(crate) fn define(
     let Any = &TypeVar::new(
         "Any",
         "Any integer, float, boolean, or reference scalar or vector type",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .floats(Interval::All)
-            .bools(Interval::All)
-            .refs(Interval::All)
-            .simd_lanes(Interval::All)
-            .includes_scalars(true)
-            .build(),
+        TypeSetBuilder::all(),
     );
 
     let AnyTo = &TypeVar::copy_from(Any, "AnyTo".to_string());
@@ -3888,6 +3881,22 @@ pub(crate) fn define(
         .operands_in(vec![lo, hi])
         .operands_out(vec![a])
         .is_ghost(true),
+    );
+
+    let x = &Operand::new("x", Any);
+
+    ig.push(
+        Inst::new(
+            "ghost_use",
+            r#"
+        Keep the argument alive without doing anything else.
+
+        This is useful to keep SSA values alive for debuginfo.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .other_side_effects(true),
     );
 
     ig.build()

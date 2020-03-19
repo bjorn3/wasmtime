@@ -2475,14 +2475,28 @@ pub(crate) fn define(
     define_control_flow(&mut e, shared_defs, settings, r);
     define_reftypes(&mut e, shared_defs, r);
 
+    let ghost_use = shared_defs.instructions.by_name("ghost_use");
     let x86_elf_tls_get_addr = x86.by_name("x86_elf_tls_get_addr");
     let x86_macho_tls_get_addr = x86.by_name("x86_macho_tls_get_addr");
 
+    let rec_ghost_use_gpr = r.recipe("ghost_use_gpr");
+    let rec_ghost_use_fpr = r.recipe("ghost_use_fpr");
+    let rec_ghost_use_stack = r.recipe("ghost_use_stack");
     let rec_elf_tls_get_addr = r.recipe("elf_tls_get_addr");
     let rec_macho_tls_get_addr = r.recipe("macho_tls_get_addr");
 
     e.enc64_rec(x86_elf_tls_get_addr, rec_elf_tls_get_addr, 0);
     e.enc64_rec(x86_macho_tls_get_addr, rec_macho_tls_get_addr, 0);
+
+    for ty in ValueType::all_lane_types() {
+        if !ty.is_float() {
+            e.enc_32_64_rec(ghost_use.bind(ty), rec_ghost_use_gpr, 0);
+        }
+        if ty.is_float() {
+            e.enc_32_64_rec(ghost_use.bind(ty), rec_ghost_use_fpr, 0);
+        }
+        e.enc_32_64_rec(ghost_use.bind(ty), rec_ghost_use_stack, 0);
+    }
 
     e
 }

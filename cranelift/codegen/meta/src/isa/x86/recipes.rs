@@ -3376,5 +3376,23 @@ pub(crate) fn define<'shared>(
         regs).rex_kind(RecipePrefixKind::Evex)
     );
 
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("ghost_use_gpr", &formats.unary, 0)
+            .operands_in(vec![gpr])
+            .emit(""),
+    );
+
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("ghost_use_fpr", &formats.unary, 0)
+            .operands_in(vec![fpr])
+            .emit(""),
+    );
+
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("ghost_use_stack", &formats.unary, 0)
+            .operands_in(vec![OperandConstraint::Stack(Stack::new(gpr))])
+            .emit(""),
+    );
+
     recipes
 }
