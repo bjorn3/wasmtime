@@ -93,9 +93,11 @@ pub fn build_value_labels_ranges<T>(
     isa: &dyn TargetIsa,
 ) -> ValueLabelsRanges
 where
-    T: From<SourceLoc> + Deref<Target = SourceLoc> + Ord + Copy,
+    T: From<SourceLoc> + Deref<Target = SourceLoc> + Ord + Copy + std::fmt::Debug,
 {
     let values_labels = build_value_labels_index::<T>(func);
+
+    println!("{:#?}", values_labels);
 
     let mut blocks = func.layout.blocks().collect::<Vec<_>>();
     blocks.sort_by_key(|block| func.offsets[*block]); // Ensure inst offsets always increase
@@ -157,7 +159,7 @@ where
             }
 
             // New source locations range started: abandon all tracked values.
-            if last_srcloc.is_some() && last_srcloc.unwrap() > srcloc {
+            if last_srcloc.is_some() && last_srcloc.unwrap() != srcloc {
                 for (_, label, start_offset, last_loc) in &tracked_values {
                     add_range(*label, (*start_offset, end_offset), *last_loc);
                 }
@@ -165,15 +167,7 @@ where
                 last_srcloc = None;
             }
 
-            // Get non-processed Values based on srcloc
-            let range = (
-                match last_srcloc {
-                    Some(a) => Excluded(a),
-                    None => Unbounded,
-                },
-                Included(srcloc),
-            );
-            let active_values = values_labels.range(range).flat_map(|(_, values)| values);
+            let active_values = values_labels.range(..).flat_map(|(_, values)| values);
             let active_values = active_values.filter(|(v, _)| {
                 // Ignore dead/inactive Values.
                 let range = liveness_ranges.get(*v);
@@ -245,7 +239,7 @@ where
     ranges
 }
 
-#[derive(Eq, Clone, Copy)]
+#[derive(Debug, Eq, Clone, Copy)]
 pub struct ComparableSourceLoc(SourceLoc);
 
 impl From<SourceLoc> for ComparableSourceLoc {
