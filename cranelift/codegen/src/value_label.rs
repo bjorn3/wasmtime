@@ -101,7 +101,8 @@ where
 
     let mut ranges = HashMap::new();
     let mut add_range = |label, range: (u32, u32), loc: ValueLoc| {
-        if range.0 >= range.1 || !loc.is_assigned() {
+        assert!(range.0 <= range.1);
+        if range.0 == range.1 || !loc.is_assigned() {
             return;
         }
         ranges
