@@ -151,6 +151,7 @@ use smallvec::SmallVec;
 pub type LiveRange = GenericLiveRange<Layout>;
 
 // See comment of liveins below.
+#[derive(Debug)]
 pub struct Interval {
     begin: Block,
     end: Inst,
@@ -189,6 +190,18 @@ pub struct GenericLiveRange<PO: ProgramOrder> {
     liveins: SmallVec<[Interval; 2]>,
 
     po: PhantomData<*const PO>,
+}
+
+impl<PO: ProgramOrder> std::fmt::Debug for GenericLiveRange<PO> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("LiveRange")
+            .field("value", &self.value)
+            .field("affinity", &self.affinity)
+            .field("def_begin", &self.def_begin)
+            .field("def_end", &self.def_end)
+            .field("liveind", &self.liveins)
+            .finish()
+    }
 }
 
 /// A simple helper macro to make comparisons more natural to read.
