@@ -176,6 +176,7 @@ pub(crate) fn output_to_const<C: LowerCtx<I = Inst>>(ctx: &mut C, out: InsnOutpu
             Some(0)
         } else {
             match inst_data {
+                &InstructionData::UnaryBool { opcode: _, imm } => Some(imm as u64),
                 &InstructionData::UnaryImm { opcode: _, imm } => {
                     // Only has Into for i64; we use u64 elsewhere, so we cast.
                     let imm: i64 = imm.into();
