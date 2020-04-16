@@ -32,7 +32,7 @@ impl SubTest for TestRun {
     }
 
     fn needs_isa(&self) -> bool {
-        false
+        true
     }
 
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> SubtestResult<()> {
@@ -44,6 +44,11 @@ impl SubTest for TestRun {
                 trace!("Parsed run command: {}", command);
                 // TODO in following changes we will use the parsed command to alter FunctionRunner's behavior.
 
+                if context.isa.unwrap().triple().architecture != Architecture::host() {
+                    println!("Skipping for non-native isa {}", context.isa.unwrap().triple().architecture);
+                    return Ok(());
+                }
+                
                 let runner =
                     FunctionRunner::with_host_isa(func.clone().into_owned(), context.flags.clone());
                 runner.run()?
