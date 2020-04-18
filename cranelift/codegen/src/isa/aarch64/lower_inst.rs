@@ -1365,7 +1365,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
             panic!("Vector ops not implemented.");
         }
 
-        Opcode::Isplit | Opcode::Iconcat => panic!("Vector ops not supported."),
+        Opcode::Isplit => panic!("isplit should have been removed by legalization!"),
+        Opcode::Iconcat => panic!("iconcat result users should have been removed by legalization!"),
+
         Opcode::Imax | Opcode::Imin | Opcode::Umin | Opcode::Umax => {
             panic!("Vector ops not supported.")
         }

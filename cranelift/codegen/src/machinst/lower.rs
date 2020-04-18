@@ -186,6 +186,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 vcode.set_vreg_type(vreg, f.dfg.value_type(*param));
             }
             for inst in f.layout.block_insts(bb) {
+                if f.dfg[inst].opcode() == Opcode::Iconcat {
+                    continue; // iconcat results are never used after legalization
+                }
                 for result in f.dfg.inst_results(inst) {
                     let vreg = alloc_vreg(
                         &mut value_regs,
