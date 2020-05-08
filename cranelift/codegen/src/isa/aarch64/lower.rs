@@ -408,7 +408,7 @@ fn input_to_rse<C: LowerCtx<I = Inst>>(
 
         // Is this a zero-extend or sign-extend and can we handle that with a register-mode operator?
         if op == Opcode::Uextend || op == Opcode::Sextend {
-            assert!(out_bits == 32 || out_bits == 64);
+            assert!(out_bits <= 64);
             let sign_extend = op == Opcode::Sextend;
             let extendee = get_input(ctx, out, 0);
             let inner_ty = ctx.input_ty(extendee.insn, extendee.input);
