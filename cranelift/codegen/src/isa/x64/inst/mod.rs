@@ -359,6 +359,9 @@ pub enum Inst {
     /// Jump to a known target: jmp simm32.
     JmpKnown { dst: BranchTarget },
 
+    /// One-way conditional branch: jcond cond target.
+    JmpIf { cc: CC, taken: BranchTarget },
+
     /// Two-way conditional branch: jcond cond target target.
     /// Emitted as a compound sequence; the MachBuffer will shrink it as appropriate.
     JmpCond {
@@ -915,6 +918,10 @@ impl Inst {
         Inst::JmpKnown { dst }
     }
 
+    pub(crate) fn jmp_if(cc: CC, taken: BranchTarget) -> Inst {
+        Inst::JmpIf { cc, taken }
+    }
+
     pub(crate) fn jmp_cond(cc: CC, taken: BranchTarget, not_taken: BranchTarget) -> Inst {
         Inst::JmpCond {
             cc,
@@ -1406,12 +1413,18 @@ impl ShowWithRRU for Inst {
                 format!("{} {}", ljustify("jmp".to_string()), dst.show_rru(mb_rru))
             }
 
+            Inst::JmpIf { cc, taken } => format!(
+                "{} {}",
+                ljustify2("j".to_string(), cc.to_string()),
+                taken.show_rru(mb_rru),
+            ),
+
             Inst::JmpCond {
                 cc,
                 taken,
                 not_taken,
             } => format!(
-                "{} taken={} not_taken={}",
+                "{} {}; j {}",
                 ljustify2("j".to_string(), cc.to_string()),
                 taken.show_rru(mb_rru),
                 not_taken.show_rru(mb_rru)
@@ -1660,6 +1673,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         Inst::Ret
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
+        | Inst::JmpIf { .. }
         | Inst::JmpCond { .. }
         | Inst::Nop { .. }
         | Inst::TrapIf { .. }
@@ -2015,6 +2029,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
         | Inst::JmpCond { .. }
+        | Inst::JmpIf { .. }
         | Inst::Nop { .. }
         | Inst::TrapIf { .. }
         | Inst::VirtualSPOffsetAdj { .. }
