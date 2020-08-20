@@ -491,19 +491,17 @@ impl Inst {
     }
 
     pub(crate) fn sign_extend_rax_to_rdx(size: u8) -> Inst {
-        debug_assert!(size == 8 || size == 4 || size == 2);
+        debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
         Inst::SignExtendRaxRdx { size }
     }
 
     pub(crate) fn imm_r(dst_is_64: bool, simm64: u64, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
-        if !dst_is_64 {
-            debug_assert!(
-                low32_will_sign_extend_to_64(simm64),
-                "{} won't sign-extend to 64 bits!",
-                simm64
-            );
-        }
+        let simm64 = if !dst_is_64 {
+            (((simm64 as i64) << 32) >> 32) as u64
+        } else {
+            simm64
+        };
         Inst::Imm_R {
             dst_is_64,
             simm64,
@@ -1078,6 +1076,7 @@ impl ShowWithRRU for Inst {
             ),
 
             Inst::SignExtendRaxRdx { size } => match size {
+                1 => "cbw; mov %ah, %dl",
                 2 => "cwd",
                 4 => "cdq",
                 8 => "cqo",

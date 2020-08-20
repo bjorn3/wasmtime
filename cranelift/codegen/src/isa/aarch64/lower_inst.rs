@@ -2590,7 +2590,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::SwidenHigh
         | Opcode::UwidenLow
         | Opcode::UwidenHigh => unimplemented!(),
-        Opcode::TlsValue => unimplemented!(),
+        Opcode::TlsValue => unimplemented!("tls_value"),
     }
 
     Ok(())

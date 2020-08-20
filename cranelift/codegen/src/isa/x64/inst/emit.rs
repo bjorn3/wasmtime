@@ -620,11 +620,12 @@ pub(crate) fn emit(
             divisor,
             loc,
         } => {
-            let (prefix, rex_flags) = match size {
-                2 => (LegacyPrefix::_66, RexFlags::clear_w()),
-                4 => (LegacyPrefix::None, RexFlags::clear_w()),
-                8 => (LegacyPrefix::None, RexFlags::set_w()),
-                _ => unreachable!(),
+            let (opcode, prefix, rex_flags) = match size {
+                1 => (0xF6, LegacyPrefix::None, RexFlags::clear_w()),
+                2 => (0xF7, LegacyPrefix::_66, RexFlags::clear_w()),
+                4 => (0xF7, LegacyPrefix::None, RexFlags::clear_w()),
+                8 => (0xF7, LegacyPrefix::None, RexFlags::set_w()),
+                _ => unreachable!("{}", size),
             };
 
             sink.add_trap(*loc, TrapCode::IntegerDivisionByZero);
@@ -633,12 +634,12 @@ pub(crate) fn emit(
             match divisor {
                 RegMem::Reg { reg } => {
                     let src = int_reg_enc(*reg);
-                    emit_std_enc_enc(sink, prefix, 0xF7, 1, subopcode, src, rex_flags)
+                    emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, src, rex_flags)
                 }
                 RegMem::Mem { addr: src } => emit_std_enc_mem(
                     sink,
                     prefix,
-                    0xF7,
+                    opcode,
                     1,
                     subopcode,
                     &src.finalize(state),
@@ -675,12 +676,25 @@ pub(crate) fn emit(
 
         Inst::SignExtendRaxRdx { size } => {
             match size {
-                2 => sink.put1(0x66),
-                4 => {}
-                8 => sink.put1(0x48),
+                1 => {
+                    // cbw (sign extend %al to %ax)
+                    sink.put1(0x66);
+                    sink.put1(0x98);
+                    // mov %ah, %dl
+                    sink.put1(0x88);
+                    sink.put1(0xE2);
+                }
+                2 => {
+                    sink.put1(0x66);
+                    sink.put1(0x99);
+                }
+                4 => sink.put1(0x99),
+                8 => {
+                    sink.put1(0x48);
+                    sink.put1(0x99);
+                }
                 _ => unreachable!(),
             }
-            sink.put1(0x99);
         }
 
         Inst::CheckedDivOrRemSeq {

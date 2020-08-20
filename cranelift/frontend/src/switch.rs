@@ -240,8 +240,8 @@ impl Switch {
             // There are currently no 128bit systems supported by rustc, but once we do ensure that
             // we don't silently ignore a part of the jump table for 128bit integers on 128bit systems.
             assert!(
-                u64::try_from(blocks.len()).is_ok(),
-                "Jump tables bigger than 2^64-1 are not yet supported"
+                u32::try_from(blocks.len()).is_ok(),
+                "Jump tables bigger than 2^32-1 are not yet supported"
             );
 
             let mut jt_data = JumpTableData::new();
@@ -265,18 +265,18 @@ impl Switch {
                 }
             };
 
-            let discr = if bx.func.dfg.value_type(discr).bits() > 64 {
-                // Check for overflow of cast to u64.
+            let discr = if bx.func.dfg.value_type(discr).bits() > 32 {
+                // Check for overflow of cast to u32.
                 let new_block = bx.create_block();
-                let bigger_than_u64 =
+                let bigger_than_u32 =
                     bx.ins()
-                        .icmp_imm(IntCC::UnsignedGreaterThan, discr, u64::max_value() as i64);
-                bx.ins().brnz(bigger_than_u64, otherwise, &[]);
+                        .icmp_imm(IntCC::UnsignedGreaterThan, discr, u32::max_value() as i64);
+                bx.ins().brnz(bigger_than_u32, otherwise, &[]);
                 bx.ins().jump(new_block, &[]);
                 bx.switch_to_block(new_block);
 
-                // Cast to u64, as br_table is not implemented for integers bigger than 64bits.
-                bx.ins().ireduce(types::I64, discr)
+                // Cast to u32, as br_table is not implemented for integers bigger than 32bits.
+                bx.ins().ireduce(types::I32, discr)
             } else {
                 discr
             };

@@ -141,12 +141,13 @@ fn extend_input_to_reg(ctx: Ctx, spec: InsnInput, ext_spec: ExtSpec) -> Reg {
 
     let ext_mode = match (input_size, requested_size) {
         (a, b) if a == b => return input_to_reg(ctx, spec),
-        (a, 32) if a == 1 || a == 8 => ExtMode::BL,
+        (1, 8) => return input_to_reg(ctx, spec),
+        (a, 16) | (a, 32) if a == 1 || a == 8 => ExtMode::BL,
         (a, 64) if a == 1 || a == 8 => ExtMode::BQ,
         (16, 32) => ExtMode::WL,
         (16, 64) => ExtMode::WQ,
         (32, 64) => ExtMode::LQ,
-        _ => unreachable!(),
+        _ => unreachable!("extend {} -> {}", input_size, requested_size),
     };
 
     let requested_ty = if requested_size == 32 {
@@ -385,10 +386,37 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::Ineg => {
+            let ty = ty.unwrap();
+            if ty.lane_count() > 1 {
+                unimplemented!("vector ineg");
+            } else {
+                let is_64 = ty == types::I64;
+                let val = input_to_reg_mem_imm(ctx, inputs[0]);
+                let dst = output_to_reg(ctx, outputs[0]);
+                ctx.emit(Inst::imm_r(is_64, 0, dst));
+                ctx.emit(Inst::alu_rmi_r(is_64, AluRmiROpcode::Sub, val, dst));
+            }
+        }
+
+        Opcode::Bnot => {
+            let ty = ty.unwrap();
+            if ty.lane_count() > 1 {
+                unimplemented!("vector bnot");
+            } else {
+                let is_64 = ty == types::I64;
+                let val = input_to_reg_mem_imm(ctx, inputs[0]);
+                let dst = output_to_reg(ctx, outputs[0]);
+                // FIXME use real not instruction
+                ctx.emit(Inst::imm_r(is_64, -1i64 as u64, dst));
+                ctx.emit(Inst::alu_rmi_r(is_64, AluRmiROpcode::Xor, val, dst));
+            }
+        }
+
         Opcode::Ishl | Opcode::Ushr | Opcode::Sshr | Opcode::Rotl | Opcode::Rotr => {
             let dst_ty = ctx.output_ty(insn, 0);
             debug_assert_eq!(ctx.input_ty(insn, 0), dst_ty);
-            debug_assert!(dst_ty == types::I32 || dst_ty == types::I64);
+            debug_assert!(dst_ty == types::I32 || dst_ty == types::I64 || (op != Opcode::Rotl && op != Opcode::Rotr));
 
             let lhs = input_to_reg(ctx, inputs[0]);
 
@@ -824,7 +852,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let dst = output_to_reg(ctx, outputs[0]);
 
             let ext_mode = match (src_ty.bits(), dst_ty.bits()) {
-                (1, 32) | (8, 32) => Some(ExtMode::BL),
+                (1, 8) | (1, 16) | (1, 32) | (8, 16) | (8, 32) => Some(ExtMode::BL),
                 (1, 64) | (8, 64) => Some(ExtMode::BQ),
                 (16, 32) => Some(ExtMode::WL),
                 (16, 64) => Some(ExtMode::WQ),
