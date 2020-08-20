@@ -392,7 +392,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "thiserror",
- "wast 22.0.0",
+ "wast",
 ]
 
 [[package]]
@@ -412,18 +412,6 @@ name = "cranelift-entity"
 version = "0.66.0"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "cranelift-faerie"
-version = "0.66.0"
-dependencies = [
- "anyhow",
- "cranelift-codegen",
- "cranelift-module",
- "faerie",
- "goblin",
- "target-lexicon",
 ]
 
 [[package]]
@@ -561,7 +549,6 @@ dependencies = [
  "cranelift",
  "cranelift-codegen",
  "cranelift-entity",
- "cranelift-faerie",
  "cranelift-filetests",
  "cranelift-frontend",
  "cranelift-interpreter",
@@ -826,21 +813,6 @@ name = "example-wasi-wasm"
 version = "0.0.0"
 
 [[package]]
-name = "faerie"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfef65b0e94693295c5d2fe2506f0ee6f43465342d4b5331659936aee8b16084"
-dependencies = [
- "goblin",
- "indexmap",
- "log",
- "scroll",
- "string-interner",
- "target-lexicon",
- "thiserror",
-]
-
-[[package]]
 name = "fake-simd"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -950,17 +922,6 @@ name = "glob"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
-
-[[package]]
-name = "goblin"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3081214398d39e4bd7f2c1975f0488ed04614ffdd976c6fc7a0708278552c0da"
-dependencies = [
- "log",
- "plain",
- "scroll",
-]
 
 [[package]]
 name = "hashbrown"
@@ -1309,7 +1270,7 @@ dependencies = [
  "peepmatic-test-operator",
  "peepmatic-traits",
  "serde",
- "wast 22.0.0",
+ "wast",
  "z3",
 ]
 
@@ -1337,7 +1298,7 @@ dependencies = [
  "peepmatic-traits",
  "rand 0.7.3",
  "serde",
- "wast 22.0.0",
+ "wast",
 ]
 
 [[package]]
@@ -1362,7 +1323,7 @@ dependencies = [
  "serde",
  "serde_test",
  "thiserror",
- "wast 22.0.0",
+ "wast",
 ]
 
 [[package]]
@@ -1383,18 +1344,12 @@ version = "0.66.0"
 dependencies = [
  "peepmatic-traits",
  "serde",
- "wast 22.0.0",
+ "wast",
 ]
 
 [[package]]
 name = "peepmatic-traits"
 version = "0.66.0"
-
-[[package]]
-name = "plain"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "ppv-lite86"
@@ -1721,9 +1676,9 @@ dependencies = [
 
 [[package]]
 name = "regalloc"
-version = "0.0.29"
+version = "0.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c178c51068338acd359c6e1ed356fcffe6b6cb3c162f68f70e251ca29bfe0eba"
+checksum = "2041c2d34f6ff346d6f428974f03d8bf12679b0c816bb640dc5eb1d48848d8d1"
 dependencies = [
  "log",
  "rustc-hash",
@@ -1964,18 +1919,9 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "staticvec"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba02879e2cff631c9dad99168c191fa75201a263e159cc9669d3df58cb242093"
-
-[[package]]
-name = "string-interner"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd710eadff449a1531351b0e43eb81ea404336fa2f56c777427ab0e32a4cf183"
-dependencies = [
- "serde",
-]
+checksum = "4fbd8c65873d2e06991c33399d5e4bccba6ba04743fe99e9656afa0c64137d2c"
 
 [[package]]
 name = "strsim"
@@ -2650,7 +2596,7 @@ version = "0.19.0"
 dependencies = [
  "anyhow",
  "wasmtime",
- "wast 21.0.0",
+ "wast",
 ]
 
 [[package]]
@@ -2676,24 +2622,6 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "11.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df4d67ba9266f4fcaf2e8a1afadc5e2a959e51aecc07b1ecbdf85a6ddaf08bde"
-dependencies = [
- "leb128",
-]
-
-[[package]]
-name = "wast"
-version = "21.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b1844f66a2bc8526d71690104c0e78a8e59ffa1597b7245769d174ebb91deb5"
-dependencies = [
- "leb128",
-]
-
-[[package]]
-name = "wast"
 version = "22.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe1220ed7f824992b426a76125a3403d048eaf0f627918e97ade0d9b9d510d20"
@@ -2703,11 +2631,11 @@ dependencies = [
 
 [[package]]
 name = "wat"
-version = "1.0.22"
+version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce85d72b74242c340e9e3492cfb602652d7bb324c3172dd441b5577e39a2e18c"
+checksum = "f888158d9a4b7c39b859f72a435019835b64097c749f4f28d319004ca5a520b8"
 dependencies = [
- "wast 21.0.0",
+ "wast",
 ]
 
 [[package]]
@@ -2809,7 +2737,7 @@ dependencies = [
 
 [[package]]
 name = "witx"
-version = "0.8.5"
+version = "0.8.7"
 dependencies = [
  "anyhow",
  "diff",
@@ -2817,7 +2745,7 @@ dependencies = [
  "pretty_env_logger",
  "structopt",
  "thiserror",
- "wast 11.0.0",
+ "wast",
 ]
 
 [[package]]
