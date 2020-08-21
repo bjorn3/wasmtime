@@ -150,6 +150,12 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         }
     }
 
+    /// Reserve capacity for at least `inst_count` more vcode instructions.
+    pub fn reserve_insts(&mut self, inst_count: usize) {
+        self.vcode.insts.reserve(inst_count);
+        self.vcode.srclocs.reserve(inst_count);
+    }
+
     /// Access the ABI object.
     pub fn abi(&mut self) -> &mut dyn ABIBody<I = I> {
         &mut *self.vcode.abi

@@ -320,9 +320,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let mut next_vreg: u32 = 0;
 
         let mut value_regs = SecondaryMap::with_default(Reg::invalid());
+        let mut block_count = 0;
+        let mut inst_count = 0;
 
         // Assign a vreg to each block param and each inst result.
         for bb in f.layout.blocks() {
+            block_count += 1;
             for &param in f.dfg.block_params(bb) {
                 let ty = f.dfg.value_type(param);
                 let vreg = alloc_vreg(&mut value_regs, I::rc_for_type(ty)?, param, &mut next_vreg);
@@ -330,6 +333,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 debug!("bb {} param {}: vreg {:?}", bb, param, vreg);
             }
             for inst in f.layout.block_insts(bb) {
+                inst_count += 1;
                 for &result in f.dfg.inst_results(inst) {
                     let ty = f.dfg.value_type(result);
                     let vreg =
@@ -403,8 +407,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             inst_needed,
             vreg_needed,
             next_vreg,
-            block_insts: vec![],
-            block_ranges: vec![],
+            block_insts: Vec::with_capacity(inst_count),
+            block_ranges: Vec::with_capacity(block_count),
             bb_insts: vec![],
             ir_insts: vec![],
             pinned_reg: None,
@@ -616,6 +620,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn finish_ir_inst(&mut self, loc: SourceLoc) {
+        self.bb_insts.reserve(self.ir_insts.len());
         // `bb_insts` is kept in reverse order, so emit the instructions in
         // reverse order.
         for mut tuple in self.ir_insts.drain(..).rev() {
@@ -626,6 +631,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
     fn finish_bb(&mut self) {
         let start = self.block_insts.len();
+        self.block_insts.reserve(self.bb_insts.len());
         for tuple in self.bb_insts.drain(..).rev() {
             self.block_insts.push(tuple);
         }
@@ -634,6 +640,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn copy_bbs_to_vcode(&mut self) {
+        self.vcode.reserve_insts(self.block_insts.len());
         for &(start, end) in self.block_ranges.iter().rev() {
             for &InstTuple {
                 loc,

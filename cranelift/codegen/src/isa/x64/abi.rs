@@ -703,7 +703,8 @@ fn ty_from_ty_hint_or_reg_class(r: Reg, ty: Option<Type>) -> Type {
 }
 
 fn get_caller_saves(call_conv: CallConv) -> Vec<Writable<Reg>> {
-    let mut caller_saved = Vec::new();
+    let caller_saved_count = 9 + if call_conv.extends_baldrdash() { 4 } else { 0 } + 16;
+    let mut caller_saved = Vec::with_capacity(caller_saved_count);
 
     // Systemv calling convention:
     // - GPR: all except RBX, RBP, R12 to R15 (which are callee-saved).
@@ -821,7 +822,8 @@ fn compute_arg_locs(
     let mut next_gpr = 0;
     let mut next_vreg = 0;
     let mut next_stack: u64 = 0;
-    let mut ret = vec![];
+    let ret_len = params.len() + if add_ret_area_ptr { 1 } else { 0 };
+    let mut ret = Vec::with_capacity(ret_len);
 
     for i in 0..params.len() {
         // Process returns backward, according to the SpiderMonkey ABI (which we
