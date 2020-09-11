@@ -36,7 +36,9 @@ use crate::timing;
 use crate::unreachable_code::eliminate_unreachable_code;
 use crate::value_label::{build_value_labels_ranges, ComparableSourceLoc, ValueLabelsRanges};
 use crate::verifier::{verify_context, verify_locations, VerifierErrors, VerifierResult};
+use alloc::boxed::Box;
 use alloc::vec::Vec;
+use std::any::Any;
 use log::debug;
 
 /// Persistent data structures and compilation pipeline.
@@ -58,6 +60,10 @@ pub struct Context {
 
     /// Redundant-reload remover context.
     pub redundant_reload_remover: RedundantReloadRemover,
+
+    /// The VCode generated when using a machinst backend. The containig memory allocations can
+    /// later be reused.
+    reuse_vcode: Option<Box<dyn Any>>,
 
     /// Result of MachBackend compilation, if computed.
     pub mach_compile_result: Option<MachCompileResult>,
@@ -87,6 +93,7 @@ impl Context {
             regalloc: regalloc::Context::new(),
             loop_analysis: LoopAnalysis::new(),
             redundant_reload_remover: RedundantReloadRemover::new(),
+            reuse_vcode: None,
             mach_compile_result: None,
             want_disasm: false,
         }
@@ -189,7 +196,9 @@ impl Context {
         self.remove_constant_phis(isa)?;
 
         if let Some(backend) = isa.get_mach_backend() {
-            let result = backend.compile_function(&self.func, self.want_disasm)?;
+            let (result, reuse_vcode) =
+                backend.compile_function(&self.func, self.reuse_vcode.take(), self.want_disasm)?;
+            self.reuse_vcode = reuse_vcode;
             let info = result.code_info();
             self.mach_compile_result = Some(result);
             Ok(info)

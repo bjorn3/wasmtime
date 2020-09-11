@@ -4,12 +4,13 @@ use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 use crate::isa::Builder as IsaBuilder;
 use crate::machinst::{
-    compile, MachBackend, MachCompileResult, ShowWithRRU, TargetIsaAdapter, VCode,
+    compile, MachBackend, MachCompileResult, LowerBackend, ShowWithRRU, TargetIsaAdapter, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings;
 
 use alloc::boxed::Box;
+use std::any::Any;
 
 use regalloc::RealRegUniverse;
 use target_lexicon::{Aarch64Architecture, Architecture, Triple};
@@ -45,10 +46,11 @@ impl AArch64Backend {
     fn compile_vcode(
         &self,
         func: &Function,
+        reuse_vcode: Option<VCode<<Self as LowerBackend>::MInst>>,
         flags: settings::Flags,
     ) -> CodegenResult<VCode<inst::Inst>> {
         let abi = Box::new(abi::AArch64ABIBody::new(func, flags)?);
-        compile::compile::<AArch64Backend>(func, self, abi)
+        compile::compile::<AArch64Backend>(func, self, reuse_vcode, abi)
     }
 }
 
@@ -56,10 +58,11 @@ impl MachBackend for AArch64Backend {
     fn compile_function(
         &self,
         func: &Function,
+        reuse_vcode: Option<Box<dyn Any>>,
         want_disasm: bool,
-    ) -> CodegenResult<MachCompileResult> {
+    ) -> CodegenResult<(MachCompileResult, Option<Box<dyn Any>>)> {
         let flags = self.flags();
-        let vcode = self.compile_vcode(func, flags.clone())?;
+        let vcode = self.compile_vcode(func, reuse_vcode.map(|vcode| *vcode.downcast().unwrap()), flags.clone())?;
         let buffer = vcode.emit();
         let frame_size = vcode.frame_size();
 
@@ -71,11 +74,14 @@ impl MachBackend for AArch64Backend {
 
         let buffer = buffer.finish();
 
-        Ok(MachCompileResult {
-            buffer,
-            frame_size,
-            disasm,
-        })
+        Ok((
+            MachCompileResult {
+                buffer,
+                frame_size,
+                disasm,
+            },
+            Some(Box::new(vcode)),
+        ))
     }
 
     fn name(&self) -> &'static str {

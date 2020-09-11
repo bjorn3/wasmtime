@@ -13,6 +13,7 @@ use regalloc::{allocate_registers_with_opts, Algorithm, Options};
 pub fn compile<B: LowerBackend + MachBackend>(
     f: &Function,
     b: &B,
+    reuse_vcode: Option<VCode<B::MInst>>,
     abi: Box<dyn ABIBody<I = B::MInst>>,
 ) -> CodegenResult<VCode<B::MInst>>
 where
@@ -21,7 +22,7 @@ where
     // Compute lowered block order.
     let block_order = BlockLoweringOrder::new(f);
     // Build the lowering context.
-    let lower = Lower::new(f, abi, block_order)?;
+    let lower = Lower::new(f, reuse_vcode, abi, block_order)?;
     // Lower the IR.
     let (mut vcode, stack_map_request_info) = {
         let _tt = timing::vcode_lower();

@@ -10,6 +10,7 @@ use crate::machinst::{
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
 use alloc::boxed::Box;
+use std::any::Any;
 use regalloc::RealRegUniverse;
 use target_lexicon::Triple;
 
@@ -38,11 +39,16 @@ impl X64Backend {
         }
     }
 
-    fn compile_vcode(&self, func: &Function, flags: Flags) -> CodegenResult<VCode<inst::Inst>> {
+    fn compile_vcode(
+        &self,
+        func: &Function,
+        reuse_vcode: Option<Box<dyn Any>>,
+        flags: Flags,
+    ) -> CodegenResult<VCode<inst::Inst>> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
         let abi = Box::new(abi::X64ABIBody::new(&func, flags)?);
-        compile::compile::<Self>(&func, self, abi)
+        compile::compile::<Self>(&func, self, reuse_vcode.map(|vcode| *vcode.downcast().unwrap()), abi)
     }
 }
 
@@ -50,10 +56,11 @@ impl MachBackend for X64Backend {
     fn compile_function(
         &self,
         func: &Function,
+        reuse_vcode: Option<Box<dyn Any>>,
         want_disasm: bool,
-    ) -> CodegenResult<MachCompileResult> {
+    ) -> CodegenResult<(MachCompileResult, Option<Box<dyn Any>>)> {
         let flags = self.flags();
-        let vcode = self.compile_vcode(func, flags.clone())?;
+        let vcode = self.compile_vcode(func, reuse_vcode, flags.clone())?;
         let buffer = vcode.emit();
         let buffer = buffer.finish();
         let frame_size = vcode.frame_size();
@@ -64,11 +71,14 @@ impl MachBackend for X64Backend {
             None
         };
 
-        Ok(MachCompileResult {
-            buffer,
-            frame_size,
-            disasm,
-        })
+        Ok((
+            MachCompileResult {
+                buffer,
+                frame_size,
+                disasm,
+            },
+            Some(Box::new(vcode)),
+        ))
     }
 
     fn flags(&self) -> &Flags {

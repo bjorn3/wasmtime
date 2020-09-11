@@ -132,9 +132,17 @@ pub struct VCodeBuilder<I: VCodeInst> {
 
 impl<I: VCodeInst> VCodeBuilder<I> {
     /// Create a new VCodeBuilder.
-    pub fn new(abi: Box<dyn ABIBody<I = I>>, block_order: BlockLoweringOrder) -> VCodeBuilder<I> {
+    pub fn new(
+        reuse_vcode: Option<VCode<I>>,
+        abi: Box<dyn ABIBody<I = I>>,
+        block_order: BlockLoweringOrder,
+    ) -> VCodeBuilder<I> {
         let reftype_class = I::ref_type_regclass(abi.flags());
-        let vcode = VCode::new(abi, block_order);
+        let vcode = if let Some(vcode) = reuse_vcode {
+            vcode.reuse(abi, block_order)
+        } else {
+            VCode::new(abi, block_order)
+        };
         let stack_map_info = StackmapRequestInfo {
             reftype_class,
             reftyped_vregs: vec![],
@@ -286,6 +294,45 @@ impl<I: VCodeInst> VCode<I> {
             safepoint_insns: vec![],
             safepoint_slots: vec![],
         }
+    }
+
+    /// Reuse the memory allocations of an existing VCode to make a new empty VCode.
+    pub fn reuse(
+        mut self,
+        new_abi: Box<dyn ABIBody<I = I>>,
+        new_block_order: BlockLoweringOrder,
+    ) -> Self {
+        let VCode {
+            liveins,
+            liveouts,
+            vreg_types,
+            have_ref_values,
+            insts,
+            srclocs,
+            entry,
+            block_ranges,
+            block_succ_range,
+            block_succs,
+            block_order,
+            abi,
+            safepoint_insns,
+            safepoint_slots,
+        } = &mut self;
+        *liveins = new_abi.liveins();
+        *liveouts = new_abi.liveouts();
+        vreg_types.clear();
+        *have_ref_values = false;
+        insts.clear();
+        srclocs.clear();
+        *entry = 0;
+        block_ranges.clear();
+        block_succ_range.clear();
+        block_succs.clear();
+        *block_order = new_block_order;
+        *abi = new_abi;
+        safepoint_insns.clear();
+        safepoint_slots.clear();
+        self
     }
 
     /// Returns the flags controlling this function's compilation.

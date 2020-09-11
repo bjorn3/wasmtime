@@ -312,10 +312,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
     pub fn new(
         f: &'func Function,
+        reuse_vcode: Option<VCode<I>>,
         abi: Box<dyn ABIBody<I = I>>,
         block_order: BlockLoweringOrder,
     ) -> CodegenResult<Lower<'func, I>> {
-        let mut vcode = VCodeBuilder::new(abi, block_order);
+        let mut vcode = VCodeBuilder::new(reuse_vcode, abi, block_order);
 
         let mut next_vreg: u32 = 0;
 

@@ -110,6 +110,7 @@ use regalloc::{
     RealReg, RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable,
 };
 use smallvec::SmallVec;
+use std::any::Any;
 use std::string::String;
 use target_lexicon::Triple;
 
@@ -317,8 +318,9 @@ pub trait MachBackend {
     fn compile_function(
         &self,
         func: &Function,
+        reuse_vcode: Option<Box<dyn Any>>,
         want_disasm: bool,
-    ) -> CodegenResult<MachCompileResult>;
+    ) -> CodegenResult<(MachCompileResult, Option<Box<dyn Any>>)>;
 
     /// Return flags for this backend.
     fn flags(&self) -> &Flags;
