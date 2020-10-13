@@ -16,11 +16,11 @@ use cranelift_native;
 #[cfg(not(windows))]
 use libc;
 use log::info;
-use std::collections::HashMap;
-use std::convert::TryInto;
+use std::convert::{TryInto, TryFrom};
 use std::ffi::CString;
 use std::io::Write;
 use std::ptr;
+use std::{collections::HashMap, ptr::NonNull};
 use target_lexicon::PointerWidth;
 #[cfg(windows)]
 use winapi;
@@ -72,7 +72,7 @@ impl SimpleJITBuilder {
         isa: Box<dyn TargetIsa>,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     ) -> Self {
-        debug_assert!(!isa.flags().is_pic(), "SimpleJIT requires non-PIC code");
+        //debug_assert!(!isa.flags().is_pic(), "SimpleJIT requires non-PIC code");
         let symbols = HashMap::new();
         Self {
             isa,
@@ -128,10 +128,15 @@ pub struct SimpleJITModule {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     memory: MemoryHandle,
     declarations: ModuleDeclarations,
+    // FIXME turn these ptr into Option<NonNull<u8>>,
     functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
     data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
     functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
+    // FIXME remove these `*_got`, to be replaced with `function`/`data_objects`
+    function_got: SecondaryMap<FuncId, Option<NonNull<*const u8>>>,
+    data_object_got: SecondaryMap<DataId, Option<NonNull<*const u8>>>,
+    function_plt: SecondaryMap<FuncId, Option<NonNull<[u8; 16]>>>,
 }
 
 /// A record of a relocation to perform.
@@ -154,6 +159,7 @@ struct StackMapRecord {
 struct CompiledBlob {
     ptr: *mut u8,
     size: usize,
+    // FIXME move into a new pending_relocations field of SimpleJITModule
     relocs: Vec<RelocRecord>,
 }
 
@@ -257,6 +263,66 @@ impl SimpleJITModule {
         }
     }
 
+    fn get_got_entry(&self, name: &ir::ExternalName) -> *const u8 {
+        match *name {
+            ir::ExternalName::User { .. } => {
+                if self.declarations.is_function(name) {
+                    let func_id = self.declarations.get_function_id(name);
+                    unsafe { *self.function_got[func_id].unwrap().as_ref() }
+                } else {
+                    let data_id = self.declarations.get_data_id(name);
+                    unsafe { *self.data_object_got[data_id].unwrap().as_ref() }
+                }
+            }
+            ir::ExternalName::LibCall(ref _libcall) => todo!(),
+            _ => panic!("invalid ExternalName {}", name),
+        }
+    }
+
+    fn get_plt_entry(&mut self, name: &ir::ExternalName) -> *const u8 {
+        match *name {
+            ir::ExternalName::User { .. } => {
+                let func_id = self.declarations.get_function_id(&name);
+                self.function_plt[func_id].unwrap().as_ptr() as *const u8
+            }
+            ir::ExternalName::LibCall(ref libcall) => {
+                // FIXME dedup got and plt entries
+
+                let sym = (self.libcall_names)(*libcall);
+                let libcall_ptr = self
+                    .lookup_symbol(&sym)
+                    .unwrap_or_else(|| panic!("can't resolve libcall {}", sym));
+
+                let got_ptr = self.memory.writable.allocate(8, 8).unwrap() as *mut *const u8;
+                unsafe {
+                    std::ptr::write(got_ptr, libcall_ptr);
+                }
+
+                let plt_ptr = self.memory.code.allocate(16, 16).unwrap() as *mut [u8; 16];
+                unsafe {
+                    Self::write_plt_entry_bytes(plt_ptr, got_ptr);
+                }
+
+                plt_ptr as *const u8
+            }
+            _ => panic!("invalid ExternalName {}", name),
+        }
+    }
+
+    unsafe fn write_plt_entry_bytes(plt_ptr: *mut [u8; 16], got_ptr: *mut *const u8) {
+        // call *got
+        let mut plt_val = [
+            0xff, 0x25, 0, 0, 0, 0, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b,
+        ];
+        let what = dbg!(got_ptr) as isize - 4;
+        let at = dbg!(plt_ptr) as isize + 2;
+        println!("{:#08x}", (what - at) as i32);
+        plt_val[2..6].copy_from_slice(&i32::to_ne_bytes(
+            i32::try_from(what - at).unwrap(),
+        ));
+        std::ptr::write(plt_ptr, plt_val);
+    }
+
     /// Returns the address of a finalized function.
     pub fn get_finalized_function(&self, func_id: FuncId) -> *const u8 {
         let info = &self.functions[func_id];
@@ -304,21 +370,33 @@ impl SimpleJITModule {
         use std::ptr::write_unaligned;
 
         let func = self.functions[id]
-            .as_ref()
+            .as_mut()
             .expect("function must be compiled before it can be finalized");
 
-        for &RelocRecord {
+        let ptr = func.ptr;
+        let size = func.size;
+        let relocs = std::mem::take(&mut func.relocs);
+
+        for RelocRecord {
             reloc,
             offset,
-            ref name,
+            name,
             addend,
-        } in &func.relocs
+        } in relocs
         {
-            debug_assert!((offset as usize) < func.size);
-            let at = unsafe { func.ptr.offset(offset as isize) };
-            let base = self.get_definition(name);
+            debug_assert!((offset as usize) < size);
+            let at = unsafe { ptr.offset(offset as isize) };
             // TODO: Handle overflow.
-            let what = unsafe { base.offset(addend as isize) };
+            let base = match reloc {
+                Reloc::Abs4 | Reloc::Abs8 | Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
+                    self.get_definition(&name)
+                }
+                Reloc::X86GOTPCRel4 => self.get_got_entry(&name),
+                Reloc::X86CallPLTRel4 => self.get_plt_entry(&name),
+
+                reloc => unimplemented!("{:?}", reloc),
+            };
+            let what = base.wrapping_offset(addend as isize);
             match reloc {
                 Reloc::Abs4 => {
                     // TODO: Handle overflow.
@@ -333,7 +411,10 @@ impl SimpleJITModule {
                         write_unaligned(at as *mut u64, what as u64)
                     };
                 }
-                Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
+                Reloc::X86PCRel4
+                | Reloc::X86CallPCRel4
+                | Reloc::X86GOTPCRel4
+                | Reloc::X86CallPLTRel4 => {
                     // TODO: Handle overflow.
                     let pcrel = ((what as isize) - (at as isize)) as i32;
                     #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
@@ -341,7 +422,6 @@ impl SimpleJITModule {
                         write_unaligned(at as *mut i32, pcrel)
                     };
                 }
-                Reloc::X86GOTPCRel4 | Reloc::X86CallPLTRel4 => panic!("unexpected PIC relocation"),
                 _ => unimplemented!(),
             }
         }
@@ -430,6 +510,9 @@ impl SimpleJITModule {
             data_objects: SecondaryMap::new(),
             functions_to_finalize: Vec::new(),
             data_objects_to_finalize: Vec::new(),
+            function_got: SecondaryMap::new(),
+            data_object_got: SecondaryMap::new(),
+            function_plt: SecondaryMap::new(),
         }
     }
 }
@@ -452,6 +535,22 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         let (id, _decl) = self
             .declarations
             .declare_function(name, linkage, signature)?;
+        if self.function_got[id].is_none() {
+            let decl = self.declarations.get_function_decl(id);
+
+            let got_ptr = self.memory.writable.allocate(8, 8).unwrap() as *mut *const u8;
+            self.function_got[id] = Some(NonNull::new(got_ptr).unwrap());
+            let got_val = self.lookup_symbol(&decl.name).unwrap_or(std::ptr::null());
+            unsafe {
+                std::ptr::write(got_ptr, got_val);
+            }
+
+            let plt_ptr = self.memory.code.allocate(16, 16).unwrap() as *mut [u8; 16];
+            self.function_plt[id] = Some(NonNull::new(plt_ptr).unwrap());
+            unsafe {
+                Self::write_plt_entry_bytes(plt_ptr, got_ptr);
+            }
+        }
         Ok(id)
     }
 
@@ -466,6 +565,15 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         let (id, _decl) = self
             .declarations
             .declare_data(name, linkage, writable, tls)?;
+        if self.data_object_got[id].is_none() {
+            let decl = self.declarations.get_data_decl(id);
+            let ptr = self.memory.writable.allocate(8, 8).unwrap() as *mut *const u8;
+            self.data_object_got[id] = Some(NonNull::new(ptr).unwrap());
+            let val = self.lookup_symbol(&decl.name).unwrap_or(std::ptr::null());
+            unsafe {
+                std::ptr::write(ptr, val);
+            }
+        }
         Ok(id)
     }
 
@@ -520,6 +628,9 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             size,
             relocs: reloc_sink.relocs,
         });
+        unsafe {
+            *self.function_got[id].unwrap().as_mut() = ptr;
+        }
 
         Ok(ModuleCompiledFunction { size: code_size })
     }
@@ -562,6 +673,9 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             size,
             relocs: vec![],
         });
+        unsafe {
+            *self.function_got[id].unwrap().as_mut() = ptr;
+        }
 
         Ok(ModuleCompiledFunction { size: total_size })
     }
@@ -640,6 +754,9 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         }
 
         self.data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
+        unsafe {
+            *self.data_object_got[id].unwrap().as_mut() = ptr;
+        }
 
         Ok(())
     }
