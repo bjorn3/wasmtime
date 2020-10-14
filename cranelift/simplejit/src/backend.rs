@@ -268,10 +268,10 @@ impl SimpleJITModule {
             ir::ExternalName::User { .. } => {
                 if self.declarations.is_function(name) {
                     let func_id = self.declarations.get_function_id(name);
-                    unsafe { *self.function_got[func_id].unwrap().as_ref() }
+                    self.function_got[func_id].unwrap().as_ptr() as *const u8
                 } else {
                     let data_id = self.declarations.get_data_id(name);
-                    unsafe { *self.data_object_got[data_id].unwrap().as_ref() }
+                    self.data_object_got[data_id].unwrap().as_ptr() as *const u8
                 }
             }
             ir::ExternalName::LibCall(ref _libcall) => todo!(),
@@ -310,7 +310,7 @@ impl SimpleJITModule {
     }
 
     unsafe fn write_plt_entry_bytes(plt_ptr: *mut [u8; 16], got_ptr: *mut *const u8) {
-        // call *got
+        // jmp *got_ptr
         let mut plt_val = [
             0xff, 0x25, 0, 0, 0, 0, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b,
         ];
@@ -415,8 +415,7 @@ impl SimpleJITModule {
                 | Reloc::X86CallPCRel4
                 | Reloc::X86GOTPCRel4
                 | Reloc::X86CallPLTRel4 => {
-                    // TODO: Handle overflow.
-                    let pcrel = ((what as isize) - (at as isize)) as i32;
+                    let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
                     #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut i32, pcrel)
