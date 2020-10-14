@@ -314,9 +314,8 @@ impl SimpleJITModule {
         let mut plt_val = [
             0xff, 0x25, 0, 0, 0, 0, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b,
         ];
-        let what = dbg!(got_ptr) as isize - 4;
-        let at = dbg!(plt_ptr) as isize + 2;
-        println!("{:#08x}", (what - at) as i32);
+        let what = got_ptr as isize - 4;
+        let at = plt_ptr as isize + 2;
         plt_val[2..6].copy_from_slice(&i32::to_ne_bytes(
             i32::try_from(what - at).unwrap(),
         ));
