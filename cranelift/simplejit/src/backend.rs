@@ -759,6 +759,26 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
 
         Ok(())
     }
+
+    fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
+        let decl = self.declarations.get_function_decl(func);
+        let signature = in_func.import_signature(decl.signature.clone());
+        in_func.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(0, func.as_u32()),
+            signature,
+            colocated: false,
+        })
+    }
+
+    fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
+        let decl = self.declarations.get_data_decl(data);
+        func.create_global_value(ir::GlobalValueData::Symbol {
+            name: ir::ExternalName::user(1, data.as_u32()),
+            offset: cranelift_codegen::ir::immediates::Imm64::new(0),
+            colocated: false,
+            tls: decl.tls,
+        })
+    }
 }
 
 impl SimpleJITModule {
