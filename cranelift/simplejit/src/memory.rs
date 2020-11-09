@@ -12,6 +12,8 @@ use std::convert::TryFrom;
 use std::mem;
 use std::ptr;
 
+use crate::SendSyncPtrMut;
+
 /// Round `size` up to the nearest multiple of `page_size`.
 fn round_up_to_page_size(size: usize, page_size: usize) -> usize {
     (size + (page_size - 1)) & !(page_size - 1)
@@ -22,7 +24,7 @@ struct PtrLen {
     #[cfg(feature = "selinux-fix")]
     map: Option<MmapMut>,
 
-    ptr: *mut u8,
+    ptr: SendSyncPtrMut,
     len: usize,
 }
 
@@ -33,7 +35,7 @@ impl PtrLen {
             #[cfg(feature = "selinux-fix")]
             map: None,
 
-            ptr: ptr::null_mut(),
+            ptr: SendSyncPtrMut(ptr::null_mut()),
             len: 0,
         }
     }
@@ -70,7 +72,7 @@ impl PtrLen {
 
             if err == 0 {
                 Ok(Self {
-                    ptr: ptr as *mut u8,
+                    ptr: SendSyncPtrMut(ptr as *mut u8),
                     len: alloc_size,
                 })
             } else {
@@ -97,7 +99,7 @@ impl PtrLen {
         };
         if !ptr.is_null() {
             Ok(Self {
-                ptr: ptr as *mut u8,
+                ptr: SendSyncPtrMut(ptr as *mut u8),
                 len: round_up_to_page_size(size, page_size),
             })
         } else {
@@ -110,11 +112,11 @@ impl PtrLen {
 #[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
 impl Drop for PtrLen {
     fn drop(&mut self) {
-        if !self.ptr.is_null() {
+        if !self.ptr.0.is_null() {
             unsafe {
-                region::protect(self.ptr, self.len, region::Protection::READ_WRITE)
+                region::protect(self.ptr.0, self.len, region::Protection::READ_WRITE)
                     .expect("unable to unprotect memory");
-                libc::free(self.ptr as _);
+                libc::free(self.ptr.0 as _);
             }
         }
     }
@@ -150,7 +152,7 @@ impl Memory {
     }
 
     /// TODO: Use a proper error type.
-    pub fn allocate(&mut self, size: usize, align: u64) -> Result<*mut u8, String> {
+    pub fn allocate(&mut self, size: usize, align: u64) -> Result<SendSyncPtrMut, String> {
         let align = usize::try_from(align).expect("alignment too big");
         if self.position % align != 0 {
             self.position += align - self.position % align;
@@ -159,9 +161,9 @@ impl Memory {
 
         if size <= self.current.len - self.position {
             // TODO: Ensure overflow is not possible.
-            let ptr = unsafe { self.current.ptr.add(self.position) };
+            let ptr = unsafe { self.current.ptr.0.add(self.position) };
             self.position += size;
-            return Ok(ptr);
+            return Ok(SendSyncPtrMut(ptr));
         }
 
         self.finish_current();
@@ -181,7 +183,7 @@ impl Memory {
             for &PtrLen { ref map, ptr, len } in &self.allocations[self.executable..] {
                 if len != 0 && map.is_some() {
                     unsafe {
-                        region::protect(ptr, len, region::Protection::READ_EXECUTE)
+                        region::protect(ptr.0, len, region::Protection::READ_EXECUTE)
                             .expect("unable to make memory readable+executable");
                     }
                 }
@@ -193,7 +195,7 @@ impl Memory {
             for &PtrLen { ptr, len } in &self.allocations[self.executable..] {
                 if len != 0 {
                     unsafe {
-                        region::protect(ptr, len, region::Protection::READ_EXECUTE)
+                        region::protect(ptr.0, len, region::Protection::READ_EXECUTE)
                             .expect("unable to make memory readable+executable");
                     }
                 }
@@ -210,7 +212,7 @@ impl Memory {
             for &PtrLen { ref map, ptr, len } in &self.allocations[self.executable..] {
                 if len != 0 && map.is_some() {
                     unsafe {
-                        region::protect(ptr, len, region::Protection::READ)
+                        region::protect(ptr.0, len, region::Protection::READ)
                             .expect("unable to make memory readonly");
                     }
                 }
@@ -222,7 +224,7 @@ impl Memory {
             for &PtrLen { ptr, len } in &self.allocations[self.executable..] {
                 if len != 0 {
                     unsafe {
-                        region::protect(ptr, len, region::Protection::READ)
+                        region::protect(ptr.0, len, region::Protection::READ)
                             .expect("unable to make memory readonly");
                     }
                 }

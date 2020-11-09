@@ -1,6 +1,6 @@
 //! Defines `SimpleJITModule`.
 
-use crate::memory::Memory;
+use crate::{memory::Memory, SendSyncPtr, SendSyncPtrMut};
 use cranelift_codegen::binemit::{
     Addend, CodeInfo, CodeOffset, Reloc, RelocSink, StackMap, StackMapSink, TrapSink,
 };
@@ -31,8 +31,8 @@ const READONLY_DATA_ALIGNMENT: u64 = 0x1;
 
 /// A builder for `SimpleJITModule`.
 pub struct SimpleJITBuilder {
-    isa: Box<dyn TargetIsa>,
-    symbols: HashMap<String, *const u8>,
+    isa: Box<dyn TargetIsa + Send + Sync>,
+    symbols: HashMap<String, SendSyncPtr>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
 }
 
@@ -69,7 +69,7 @@ impl SimpleJITBuilder {
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use `cranelift_module::default_libcall_names()`.
     pub fn with_isa(
-        isa: Box<dyn TargetIsa>,
+        isa: Box<dyn TargetIsa + Send + Sync>,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> Self {
         debug_assert!(!isa.flags().is_pic(), "SimpleJIT requires non-PIC code");
@@ -99,7 +99,7 @@ impl SimpleJITBuilder {
     where
         K: Into<String>,
     {
-        self.symbols.insert(name.into(), ptr);
+        self.symbols.insert(name.into(), SendSyncPtr(ptr));
         self
     }
 
@@ -112,10 +112,15 @@ impl SimpleJITBuilder {
         K: Into<String>,
     {
         for (name, ptr) in symbols {
-            self.symbols.insert(name.into(), ptr);
+            self.symbols.insert(name.into(), SendSyncPtr(ptr));
         }
         self
     }
+}
+
+fn assert_sync_types() {
+    fn assert_sync<T: Sync>() {}
+    assert_sync::<SimpleJITModule>();
 }
 
 /// A `SimpleJITModule` implements `Module` and emits code and data into memory where it can be
@@ -123,9 +128,9 @@ impl SimpleJITBuilder {
 ///
 /// See the `SimpleJITBuilder` for a convenient way to construct `SimpleJITModule` instances.
 pub struct SimpleJITModule {
-    isa: Box<dyn TargetIsa>,
-    symbols: HashMap<String, *const u8>,
-    libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
+    isa: Box<dyn TargetIsa + Send + Sync>,
+    symbols: HashMap<String, SendSyncPtr>,
+    libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     memory: MemoryHandle,
     declarations: ModuleDeclarations,
     functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
@@ -143,7 +148,7 @@ struct StackMapRecord {
 
 #[derive(Clone)]
 struct CompiledBlob {
-    ptr: *mut u8,
+    ptr: SendSyncPtrMut,
     size: usize,
     relocs: Vec<RelocRecord>,
 }
@@ -189,7 +194,7 @@ impl SimpleJITProduct {
         self.functions[func_id]
             .as_ref()
             .unwrap_or_else(|| panic!("{} is not defined", func_id))
-            .ptr
+            .ptr.0
     }
 
     /// Return the address and size of a data object.
@@ -197,7 +202,7 @@ impl SimpleJITProduct {
         let data = self.data_objects[data_id]
             .as_ref()
             .unwrap_or_else(|| panic!("{} is not defined", data_id));
-        (data.ptr, data.size)
+        (data.ptr.0, data.size)
     }
 }
 
@@ -205,7 +210,7 @@ impl SimpleJITModule {
     fn lookup_symbol(&self, name: &str) -> Option<*const u8> {
         self.symbols
             .get(name)
-            .copied()
+            .map(|ptr| ptr.0)
             .or_else(|| lookup_with_dlsym(name))
     }
 
@@ -215,7 +220,7 @@ impl SimpleJITModule {
                 let (name, linkage) = if self.declarations.is_function(name) {
                     let func_id = self.declarations.get_function_id(name);
                     match &self.functions[func_id] {
-                        Some(compiled) => return compiled.ptr,
+                        Some(compiled) => return compiled.ptr.0,
                         None => {
                             let decl = self.declarations.get_function_decl(func_id);
                             (&decl.name, decl.linkage)
@@ -224,7 +229,7 @@ impl SimpleJITModule {
                 } else {
                     let data_id = self.declarations.get_data_id(name);
                     match &self.data_objects[data_id] {
-                        Some(compiled) => return compiled.ptr,
+                        Some(compiled) => return compiled.ptr.0,
                         None => {
                             let decl = self.declarations.get_data_decl(data_id);
                             (&decl.name, decl.linkage)
@@ -257,7 +262,7 @@ impl SimpleJITModule {
         );
         info.as_ref()
             .expect("function must be compiled before it can be finalized")
-            .ptr
+            .ptr.0
     }
 
     /// Returns the address and size of a finalized data object.
@@ -271,7 +276,7 @@ impl SimpleJITModule {
             .as_ref()
             .expect("data object must be compiled before it can be finalized");
 
-        (compiled.ptr, compiled.size)
+        (compiled.ptr.0, compiled.size)
     }
 
     fn record_function_for_perf(&self, ptr: *mut u8, size: usize, name: &str) {
@@ -306,7 +311,7 @@ impl SimpleJITModule {
         } in &func.relocs
         {
             debug_assert!((offset as usize) < func.size);
-            let at = unsafe { func.ptr.offset(offset as isize) };
+            let at = unsafe { func.ptr.0.offset(offset as isize) };
             let base = self.get_definition(name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
@@ -353,7 +358,7 @@ impl SimpleJITModule {
         } in &data.relocs
         {
             debug_assert!((offset as usize) < data.size);
-            let at = unsafe { data.ptr.offset(offset as isize) };
+            let at = unsafe { data.ptr.0.offset(offset as isize) };
             let base = self.get_definition(name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
@@ -492,14 +497,14 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        self.record_function_for_perf(ptr, size, &decl.name);
+        self.record_function_for_perf(ptr.0, size, &decl.name);
 
         let mut reloc_sink = SimpleJITRelocSink::default();
         let mut stack_map_sink = SimpleJITStackMapSink::default();
         unsafe {
             ctx.emit_to_memory(
                 &*self.isa,
-                ptr,
+                ptr.0,
                 &mut reloc_sink,
                 trap_sink,
                 &mut stack_map_sink,
@@ -543,10 +548,10 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        self.record_function_for_perf(ptr, size, &decl.name);
+        self.record_function_for_perf(ptr.0, size, &decl.name);
 
         unsafe {
-            ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
+            ptr::copy_nonoverlapping(bytes.as_ptr(), ptr.0, size);
         }
 
         self.functions[id] = Some(CompiledBlob {
@@ -600,11 +605,11 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
                 panic!("data is not initialized yet");
             }
             Init::Zeros { .. } => {
-                unsafe { ptr::write_bytes(ptr, 0, size) };
+                unsafe { ptr::write_bytes(ptr.0, 0, size) };
             }
             Init::Bytes { ref contents } => {
                 let src = contents.as_ptr();
-                unsafe { ptr::copy_nonoverlapping(src, ptr, size) };
+                unsafe { ptr::copy_nonoverlapping(src, ptr.0, size) };
             }
         }
 

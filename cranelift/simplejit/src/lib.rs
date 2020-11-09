@@ -26,6 +26,16 @@
 mod backend;
 mod memory;
 
+#[derive(Copy, Clone)]
+struct SendSyncPtr(*const u8);
+unsafe impl Send for SendSyncPtr {}
+unsafe impl Sync for SendSyncPtr {}
+
+#[derive(Copy, Clone)]
+struct SendSyncPtrMut(*mut u8);
+unsafe impl Send for SendSyncPtrMut {}
+unsafe impl Sync for SendSyncPtrMut {}
+
 pub use crate::backend::{SimpleJITBuilder, SimpleJITModule, SimpleJITProduct};
 
 /// Version number of this crate.

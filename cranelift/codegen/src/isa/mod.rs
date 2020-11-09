@@ -159,13 +159,13 @@ pub enum LookupError {
 pub struct Builder {
     triple: Triple,
     setup: settings::Builder,
-    constructor: fn(Triple, settings::Flags, settings::Builder) -> Box<dyn TargetIsa>,
+    constructor: fn(Triple, settings::Flags, settings::Builder) -> Box<dyn TargetIsa + Send + Sync>,
 }
 
 impl Builder {
     /// Combine the ISA-specific settings with the provided ISA-independent settings and allocate a
     /// fully configured `TargetIsa` trait object.
-    pub fn finish(self, shared_flags: settings::Flags) -> Box<dyn TargetIsa> {
+    pub fn finish(self, shared_flags: settings::Flags) -> Box<dyn TargetIsa + Send + Sync> {
         (self.constructor)(self.triple, shared_flags, self.setup)
     }
 }
