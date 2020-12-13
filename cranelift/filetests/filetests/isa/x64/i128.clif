@@ -138,4 +138,508 @@ block0(v0: i128, v1: i128):
 ; nextln:  ret
 }
 
-; TODO: uextend, sextend, bandnot, bornot, bxornot, brz, brnz, popcnt, icmp, bitrev, load, store, moves (across blocks), many args, many rets
+function %f7(i64, i64) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i64, v1: i64):
+    v2 = iconcat.i64 v0, v1
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+    return v2
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f8(i128) -> i64, i64 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    v1, v2 = isplit.i64 v0
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+    return v2
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f9(i128, i128) -> b1 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128, v1: i128):
+    v2 = icmp eq v0, v1
+    v3 = icmp ne v0, v1
+    v4 = icmp slt v0, v1
+    v5 = icmp sle v0, v1
+    v6 = icmp sgt v0, v1
+    v7 = icmp sge v0, v1
+    v8 = icmp ult v0, v1
+    v9 = icmp ule v0, v1
+    v10 = icmp ugt v0, v1
+    v11 = icmp uge v0, v1
+    v12 = band v2, v3
+    v13 = band v4, v5
+    v14 = band v6, v7
+    v15 = band v8, v9
+    v16 = band v10, v11
+    v17 = band v12, v13
+    v18 = band v14, v15
+    v19 = band v17, v18
+    v20 = band v19, v16
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+    return v20
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f10(i128) -> i32 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    brz v0, block1
+    jump block2
+
+block1:
+    v1 = iconst.i32 1
+    return v1
+
+block2:
+    v2 = iconst.i32 2
+    return v2
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f11(i128) -> i32 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    brnz v0, block1
+    jump block2
+
+block1:
+    v1 = iconst.i32 1
+    return v1
+
+block2:
+    v2 = iconst.i32 2
+    return v2
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f12(i128) -> i32 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    brz v0, block1
+    jump block2
+
+block1:
+    v1 = iconst.i32 1
+    return v1
+
+block2:
+    v2 = iconst.i32 2
+    return v2
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+
+function %f13(i64) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    v1 = uextend.i128 v0
+    return v1
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f14(i64) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    v1 = sextend.i128 v0
+    return v1
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f15(i8) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    v1 = sextend.i128 v0
+    return v1
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f16(i8) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    v1 = uextend.i128 v0
+    return v1
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+
+}
+
+function %f16(i128) -> i64 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    v1 = ireduce.i64 v0
+    return v1
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f17(i128) -> i8 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    v1 = ireduce.i8 v0
+    return v1
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f18(b1) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: b1):
+    v1 = bint.i128 v0
+    return v1
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f19(i8x16) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i8x16):
+    v1 = bitcast.i128 v0
+    return v1
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f20(i128) -> i8x16 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    v1 = bitcast.i8x16 v0
+    return v1
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f21(i128, i128) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128, v1: i128):
+    v2 = band_not v0, v1
+    return v2
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f22(i128, i128) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128, v1: i128):
+    v2 = bor_not v0, v1
+    return v2
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f23(i128, i128) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128, v1: i128):
+    v2 = bxor_not v0, v1
+    return v2
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f24(i128) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    v1 = popcnt.i128 v0
+    return v1
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+
+function %f25(i128) -> i32 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    v1 = bitrev.i128 v0
+    return v1
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f26(i128, i32) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128, v1: i32):
+    v2 = ushr v0, v1
+    return v2
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f27(i128, i32) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128, v1: i32):
+    v2 = ishl v0, v1
+    return v2
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f28(i128, i32) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128, v1: i32):
+    v2 = sshr v0, v1
+    return v2
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f29(i128, i64) {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128, v1: i64):
+    store.i128 v0, v1
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f30(i64) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i64):
+    v1 = load.i128 v0
+    return v1
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f31(i128, b1) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128, v1: b1):
+    v2 = iconst.i128 0
+    brnz v1, block1(v2)
+    jump block2(v2)
+
+block1(v3: i128):
+    v4 = iconst.i128 1
+    v5 = iadd.i128 v3, v4
+    return v5
+
+block2(v6: i128):
+    v7 = iconst.i128 2
+    v8 = iadd.i128 v6, v7
+    return v8
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f32(i128, i128, i128, i64, i128, i128) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128, v5: i128):
+    v6 = iadd.i128 v0, v1
+    v7 = uextend.i128 v3
+    v8 = iadd.i128 v2, v7
+    v9 = iadd.i128 v4, v5
+    v10 = iadd.i128 v6, v8
+    v11 = iadd.i128 v9, v10
+    return v11
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
+
+function %f33(i128) -> i128, i128, i128, i64, i128, i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i128):
+    v1 = ireduce.i64 v0
+    return v0, v0, v0, v1, v0, v0
+
+; nextln:  movq    %rsi, %rax
+; nextln:  movq    %rdx, %rdx
+
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+}
