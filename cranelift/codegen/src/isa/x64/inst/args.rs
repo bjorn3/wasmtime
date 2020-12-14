@@ -15,7 +15,7 @@ use std::string::String;
 
 /// A possible addressing mode (amode) that can be used in instructions.
 /// These denote a 64-bit value only.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Amode {
     /// Immediate sign-extended and a Register.
     ImmReg {
@@ -1003,7 +1003,7 @@ impl fmt::Display for ExtMode {
 }
 
 /// These indicate the form of a scalar shift/rotate: left, signed right, unsigned right.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum ShiftKind {
     ShiftLeft,
     /// Inserts zeros in the most significant bits.
