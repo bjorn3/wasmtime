@@ -45,6 +45,7 @@ mod heap;
 mod libcall;
 mod split;
 mod table;
+pub(crate) mod tls;
 
 use self::call::expand_call;
 use self::globalvalue::expand_global_value;
@@ -246,6 +247,7 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                 | ir::Opcode::UremImm
                 | ir::Opcode::UshrImm
                 | ir::Opcode::IcmpImm => expand(inst, &mut pos.func, cfg, isa),
+                ir::Opcode::TlsValue => tls::expand_tls_value(inst, &mut pos.func, cfg, isa),
                 _ => false,
             };
 
