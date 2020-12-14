@@ -131,7 +131,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 | &ir::ArgumentPurpose::StackLimit
                 | &ir::ArgumentPurpose::SignatureId
                 | &ir::ArgumentPurpose::CalleeTLS
-                | &ir::ArgumentPurpose::CallerTLS => {}
+                | &ir::ArgumentPurpose::CallerTLS
+                | &ir::ArgumentPurpose::StructReturn => {}
                 _ => panic!(
                     "Unsupported argument purpose {:?} in signature: {:?}",
                     param.purpose, params

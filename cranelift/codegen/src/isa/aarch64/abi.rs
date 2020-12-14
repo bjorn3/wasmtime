@@ -208,7 +208,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 | &ir::ArgumentPurpose::StackLimit
                 | &ir::ArgumentPurpose::SignatureId
                 | &ir::ArgumentPurpose::CallerTLS
-                | &ir::ArgumentPurpose::CalleeTLS => {}
+                | &ir::ArgumentPurpose::CalleeTLS
+                | &ir::ArgumentPurpose::StructReturn => {}
                 _ => panic!(
                     "Unsupported argument purpose {:?} in signature: {:?}",
                     param.purpose, params
