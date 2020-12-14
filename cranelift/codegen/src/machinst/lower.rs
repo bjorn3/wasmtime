@@ -315,6 +315,7 @@ fn alloc_vregs<I: VCodeInst>(
     let regs = match regclasses {
         &[rc0] => ValueRegs::one(Reg::new_virtual(rc0, v)),
         &[rc0, rc1] => ValueRegs::two(Reg::new_virtual(rc0, v), Reg::new_virtual(rc1, v + 1)),
+        #[cfg(feature = "arm32")]
         &[rc0, rc1, rc2, rc3] => ValueRegs::four(
             Reg::new_virtual(rc0, v),
             Reg::new_virtual(rc1, v + 1),
