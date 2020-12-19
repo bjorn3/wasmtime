@@ -3893,11 +3893,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ));
                 }
                 (types::I32, types::F32) => {
-                    let src = input_to_reg_mem(ctx, inputs[0]);
+                    let src = put_input_in_reg(ctx, inputs[0]);
                     let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                     ctx.emit(Inst::gpr_to_xmm(
                         SseOpcode::Movd,
-                        src,
+                        RegMem::reg(src),
                         OperandSize::Size32,
                         dst,
                     ));
@@ -3913,11 +3913,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ));
                 }
                 (types::I64, types::F64) => {
-                    let src = input_to_reg_mem(ctx, inputs[0]);
+                    let src = put_input_in_reg(ctx, inputs[0]);
                     let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                     ctx.emit(Inst::gpr_to_xmm(
                         SseOpcode::Movq,
-                        src,
+                        RegMem::reg(src),
                         OperandSize::Size64,
                         dst,
                     ));

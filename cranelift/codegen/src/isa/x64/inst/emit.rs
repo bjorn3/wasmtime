@@ -720,13 +720,14 @@ pub(crate) fn emit(
             signed,
             divisor,
         } => {
-            let (opcode, prefix, rex_flags) = match size {
+            let (opcode, prefix, mut rex_flags) = match size {
                 1 => (0xF6, LegacyPrefixes::None, RexFlags::clear_w()),
                 2 => (0xF7, LegacyPrefixes::_66, RexFlags::clear_w()),
                 4 => (0xF7, LegacyPrefixes::None, RexFlags::clear_w()),
                 8 => (0xF7, LegacyPrefixes::None, RexFlags::set_w()),
                 _ => unreachable!("{}", size),
             };
+            if *size == 1 { rex_flags.always_emit(); }
 
             let loc = state.cur_srcloc();
             sink.add_trap(loc, TrapCode::IntegerDivisionByZero);
@@ -2921,6 +2922,7 @@ pub(crate) fn emit(
             sink.put1(0x8d);
             sink.put1(0x3d);
             emit_reloc(sink, state, Reloc::ElfX86_64TlsGd, symbol, -4);
+            sink.put4(0);
             sink.put1(0x66);
             sink.put1(0x66);
             sink.put1(0b01001000);
