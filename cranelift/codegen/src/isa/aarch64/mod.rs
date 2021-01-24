@@ -45,10 +45,9 @@ impl AArch64Backend {
     fn compile_vcode(
         &self,
         func: &Function,
-        flags: settings::Flags,
     ) -> CodegenResult<VCode<inst::Inst>> {
-        let emit_info = EmitInfo::new(flags.clone());
-        let abi = Box::new(abi::AArch64ABICallee::new(func, flags)?);
+        let emit_info = EmitInfo::new(self.flags().clone());
+        let abi = Box::new(abi::AArch64ABICallee::new(func, self.flags().clone())?);
         compile::compile::<AArch64Backend>(func, self, abi, emit_info)
     }
 }
@@ -60,7 +59,7 @@ impl MachBackend for AArch64Backend {
         want_disasm: bool,
     ) -> CodegenResult<MachCompileResult> {
         let flags = self.flags();
-        let vcode = self.compile_vcode(func, flags.clone())?;
+        let vcode = self.compile_vcode(func)?;
 
         let buffer = vcode.emit();
         let frame_size = vcode.frame_size();
