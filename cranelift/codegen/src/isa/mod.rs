@@ -92,6 +92,9 @@ mod arm32;
 #[cfg(feature = "arm64")]
 pub(crate) mod aarch64;
 
+#[cfg(feature = "riscv_newbe")]
+mod riscv_newbe;
+
 pub mod unwind;
 
 mod call_conv;
@@ -142,8 +145,23 @@ impl Default for BackendVariant {
 /// by `variant` if available.
 pub fn lookup_variant(triple: Triple, variant: BackendVariant) -> Result<Builder, LookupError> {
     match (triple.architecture, variant) {
-        (Architecture::Riscv32 { .. }, _) | (Architecture::Riscv64 { .. }, _) => {
+        (Architecture::Riscv32 { .. }, BackendVariant::Legacy)
+        | (Architecture::Riscv64 { .. }, BackendVariant::Legacy) => {
             isa_builder!(riscv, (feature = "riscv"), triple)
+        }
+        (Architecture::Riscv32 { .. }, BackendVariant::MachInst)
+        | (Architecture::Riscv64 { .. }, BackendVariant::MachInst) => {
+            isa_builder!(riscv_newbe, (feature = "riscv_newbe"), triple)
+        }
+        #[cfg(not(feature = "riscv_newbe"))]
+        (Architecture::Riscv32 { .. }, BackendVariant::Any)
+        | (Architecture::Riscv64 { .. }, BackendVariant::Any) => {
+            isa_builder!(riscv, (feature = "riscv"), triple)
+        }
+        #[cfg(feature = "riscv_newbe")]
+        (Architecture::Riscv32 { .. }, BackendVariant::Any)
+        | (Architecture::Riscv64 { .. }, BackendVariant::Any) => {
+            isa_builder!(riscv_newbe, (feature = "riscv_newbe"), triple)
         }
         (Architecture::X86_64, BackendVariant::Legacy) => {
             isa_builder!(x86, (feature = "x86"), triple)

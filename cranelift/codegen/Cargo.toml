@@ -40,7 +40,7 @@ wast = { version = "32.0.0", optional = true }
 cranelift-codegen-meta = { path = "meta", version = "0.69.0" }
 
 [features]
-default = ["std", "unwind"]
+default = ["std", "unwind", "riscv_newbe"]
 
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
@@ -65,6 +65,7 @@ arm64 = []
 riscv = []
 x64 = [] # New work-in-progress codegen backend for x86_64 based on the new isel.
 arm32 = [] # Work-in-progress codegen backend for ARM.
+riscv_newbe = [] # New work-in-progress codegen backend for riscv based on the new isel.
 
 # Option to enable all architectures.
 all-arch = [
