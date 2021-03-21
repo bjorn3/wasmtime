@@ -38,6 +38,18 @@ pub enum CallConv {
     WasmtimeAppleAarch64,
 }
 
+/// Similar to calling convention identifiers except for individual blocks.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub enum BlockConv {
+    /// Nothing special.
+    Default,
+    /// A landing pad for DWARF based unwinding. Can't be directly jumped to, but is only allowed as
+    /// abnormal return destination for `invoke` and `invoke_indirect` calls to SystemV functions.
+    /// Allows up to four block arguments to be passed by the personality function.
+    EhLandingPad,
+}
+
 impl CallConv {
     /// Return the default calling convention for the given target triple.
     pub fn triple_default(triple: &Triple) -> Self {

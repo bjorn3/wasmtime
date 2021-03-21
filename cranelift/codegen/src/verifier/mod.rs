@@ -69,7 +69,7 @@ use crate::ir::{
     types, ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue,
     Inst, JumpTable, Opcode, SigRef, StackSlot, Type, Value, ValueDef, ValueList,
 };
-use crate::isa::TargetIsa;
+use crate::isa::{BlockConv, CallConv, TargetIsa};
 use crate::iterators::IteratorExtras;
 use crate::print_errors::pretty_verifier_error;
 use crate::settings::FlagsOrIsa;
@@ -495,7 +495,7 @@ impl<'a> Verifier<'a> {
     fn verify_jump_tables(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         for (jt, jt_data) in &self.func.jump_tables {
             for &block in jt_data.iter() {
-                self.verify_block(jt, block, errors)?;
+                self.verify_block_any_block_conv(jt, block, errors)?;
             }
         }
         Ok(())
@@ -671,12 +671,36 @@ impl<'a> Verifier<'a> {
                 self.verify_value_list(inst, args, errors)?;
             }
             Invoke {
-                func_ref, ref args, destination, table, ..
+                func_ref,
+                ref args,
+                destination,
+                table,
+                ..
             } => {
                 self.verify_func_ref(inst, func_ref, errors)?;
                 self.verify_value_list(inst, args, errors)?;
                 self.verify_block(inst, destination, errors)?;
-                self.verify_jump_table(inst, table, errors)?;
+                self.verify_jump_table_any_block_conv(inst, table, errors)?;
+                let sig_ref = self.func.dfg.ext_funcs[func_ref].signature;
+                let call_conv = self.func.dfg.signatures[sig_ref].call_conv;
+                for &block in self.func.jump_tables[table].iter() {
+                    let block_conv = self.func.dfg.block_conv(block);
+                    let allowed = match call_conv {
+                        CallConv::SystemV => {
+                            matches!(block_conv, BlockConv::Default | BlockConv::EhLandingPad)
+                        }
+                        _ => matches!(block_conv, BlockConv::Default),
+                    };
+                    if !allowed {
+                        errors.fatal((
+                            inst,
+                            format!(
+                                "reference to {} with unsupported block conv {:?} for {:?} calls",
+                                block, block_conv, call_conv
+                            ),
+                        ))?;
+                    }
+                }
             }
             CallIndirect {
                 sig_ref, ref args, ..
@@ -685,12 +709,35 @@ impl<'a> Verifier<'a> {
                 self.verify_value_list(inst, args, errors)?;
             }
             InvokeIndirect {
-                sig_ref, ref args, destination, table, ..
+                sig_ref,
+                ref args,
+                destination,
+                table,
+                ..
             } => {
                 self.verify_sig_ref(inst, sig_ref, errors)?;
                 self.verify_value_list(inst, args, errors)?;
                 self.verify_block(inst, destination, errors)?;
-                self.verify_jump_table(inst, table, errors)?;
+                self.verify_jump_table_any_block_conv(inst, table, errors)?;
+                let call_conv = self.func.dfg.signatures[sig_ref].call_conv;
+                for &block in self.func.jump_tables[table].iter() {
+                    let block_conv = self.func.dfg.block_conv(block);
+                    let allowed = match call_conv {
+                        CallConv::SystemV => {
+                            matches!(block_conv, BlockConv::Default | BlockConv::EhLandingPad)
+                        }
+                        _ => matches!(block_conv, BlockConv::Default),
+                    };
+                    if !allowed {
+                        errors.fatal((
+                            inst,
+                            format!(
+                                "reference to {} with unsupported block conv {:?} for {:?} calls",
+                                block, block_conv, call_conv
+                            ),
+                        ))?;
+                    }
+                }
             }
             FuncAddr { func_ref, .. } => {
                 self.verify_func_ref(inst, func_ref, errors)?;
@@ -808,6 +855,26 @@ impl<'a> Verifier<'a> {
     }
 
     fn verify_block(
+        &self,
+        loc: impl Into<AnyEntity> + Copy,
+        e: Block,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        self.verify_block_any_block_conv(loc, e, errors)?;
+        if self.func.dfg.block_conv(e) != BlockConv::Default {
+            return errors.fatal((
+                loc,
+                format!(
+                    "invalid reference to {} with non-default block conv {:?}",
+                    e,
+                    self.func.dfg.block_conv(e),
+                ),
+            ));
+        }
+        Ok(())
+    }
+
+    fn verify_block_any_block_conv(
         &self,
         loc: impl Into<AnyEntity>,
         e: Block,
@@ -953,6 +1020,19 @@ impl<'a> Verifier<'a> {
     }
 
     fn verify_jump_table(
+        &self,
+        inst: Inst,
+        j: JumpTable,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        self.verify_jump_table_any_block_conv(inst, j, errors)?;
+        for &block in self.func.jump_tables[j].iter() {
+            self.verify_block(inst, block, errors)?;
+        }
+        Ok(())
+    }
+
+    fn verify_jump_table_any_block_conv(
         &self,
         inst: Inst,
         j: JumpTable,

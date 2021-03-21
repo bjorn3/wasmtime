@@ -11,6 +11,7 @@ use crate::ir::{
     ValueList, ValueListPool,
 };
 use crate::ir::{ExtFuncData, RelSourceLoc};
+use crate::isa::BlockConv;
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
 use core::fmt;
@@ -892,7 +893,18 @@ impl IndexMut<Inst> for DataFlowGraph {
 impl DataFlowGraph {
     /// Create a new basic block.
     pub fn make_block(&mut self) -> Block {
-        self.blocks.push(BlockData::new())
+        self.blocks.push(BlockData::new(BlockConv::Default))
+    }
+
+    /// Create a new basic block with a specific [`BlockConv`]. You should use [`make_block`]
+    /// instead in almost all cases.
+    pub fn make_block_with_block_conv(&mut self, block_conv: BlockConv) -> Block {
+        self.blocks.push(BlockData::new(block_conv))
+    }
+
+    /// Get the block convention of `block`.
+    pub fn block_conv(&self, block: Block) -> BlockConv {
+        self.blocks[block].block_conv
     }
 
     /// Get the number of parameters on `block`.
@@ -1059,13 +1071,17 @@ impl DataFlowGraph {
 #[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 struct BlockData {
+    // FIXME support in reader and writer
+    block_conv: BlockConv,
+
     /// List of parameters to this block.
     params: ValueList,
 }
 
 impl BlockData {
-    fn new() -> Self {
+    fn new(block_conv: BlockConv) -> Self {
         Self {
+            block_conv,
             params: ValueList::new(),
         }
     }
