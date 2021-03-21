@@ -229,6 +229,12 @@ impl InstructionData {
             Self::BranchTable {
                 table, destination, ..
             } => BranchInfo::Table(table, Some(destination)),
+            Self::Invoke {
+                destination, table, ..
+            }
+            | Self::InvokeIndirect {
+                destination, table, ..
+            } => BranchInfo::Table(table, Some(destination)),
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 BranchInfo::NotABranch
@@ -248,6 +254,7 @@ impl InstructionData {
             | Self::BranchFloat { destination, .. }
             | Self::BranchIcmp { destination, .. } => Some(destination),
             Self::BranchTable { .. } => None,
+            Self::Invoke { .. } | Self::InvokeIndirect { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 None
@@ -282,6 +289,7 @@ impl InstructionData {
                 ..
             } => Some(destination),
             Self::BranchTable { .. } => None,
+            Self::Invoke { .. } | Self::InvokeIndirect { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 None

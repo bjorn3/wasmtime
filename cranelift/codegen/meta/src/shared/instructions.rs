@@ -336,6 +336,8 @@ fn define_control_flow(
         .with_doc("function to call, declared by `function`");
     let args = &Operand::new("args", &entities.varargs).with_doc("call arguments");
     let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
+    let JT = &Operand::new("JT", &entities.jump_table);
+
     ig.push(
         Inst::new(
             "call",
@@ -352,10 +354,29 @@ fn define_control_flow(
         .is_call(true),
     );
 
+    ig.push(
+        Inst::new(
+            "invoke",
+            r#"
+        Direct function call with multiple valid return locations.
+
+        Call a function which has been declared in the preamble. The argument
+        types must match the function's signature. The block argument is the
+        default return location when returning normally. All jump table entries
+        are locations to which it is valid to return in an abnormal way. For
+        example to handle an exception. In this case of an abnormal return, the
+        return value(s) are not allowed to be used.
+        "#,
+            &formats.invoke,
+        )
+        .operands_in(vec![FN, args, block, JT])
+        .operands_out(vec![rvals])
+        .is_call(true)
+        .is_terminator(true),
+    );
+
     let SIG = &Operand::new("SIG", &entities.sig_ref).with_doc("function signature");
     let callee = &Operand::new("callee", iAddr).with_doc("address of function to call");
-    let args = &Operand::new("args", &entities.varargs).with_doc("call arguments");
-    let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
     ig.push(
         Inst::new(
             "call_indirect",
@@ -377,8 +398,27 @@ fn define_control_flow(
         .is_call(true),
     );
 
-    let FN = &Operand::new("FN", &entities.func_ref)
-        .with_doc("function to call, declared by `function`");
+    ig.push(
+        Inst::new(
+            "invoke_indirect",
+            r#"
+        Indirect function call with multiple valid return locations.
+
+        Call the function pointed to by `callee` with the given arguments. The
+        called function must match the specified signature. The block argument
+        is the default return location when returning normally. All jump table
+        entries are locations to which it is valid to return in an abnormal way.
+        For example to handle an exception. In this case of an abnormal return,
+        the return value(s) are not allowed to be used.
+        "#,
+            &formats.invoke_indirect,
+        )
+        .operands_in(vec![SIG, callee, args, block, JT])
+        .operands_out(vec![rvals])
+        .is_call(true)
+        .is_terminator(true),
+    );
+
     let addr = &Operand::new("addr", iAddr);
     ig.push(
         Inst::new(
