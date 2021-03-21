@@ -601,6 +601,23 @@ pub fn write_operands(
         Call {
             func_ref, ref args, ..
         } => write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool))),
+        // FIXME handle in reader
+        Invoke {
+            func_ref,
+            ref args,
+            destination,
+            table,
+            ..
+        } => {
+            write!(
+                w,
+                " {}({}), {}, {}",
+                func_ref,
+                DisplayValues(args.as_slice(pool)),
+                destination,
+                table,
+            )
+        }
         CallIndirect {
             sig_ref, ref args, ..
         } => {
@@ -611,6 +628,25 @@ pub fn write_operands(
                 sig_ref,
                 args[0],
                 DisplayValues(&args[1..])
+            )
+        }
+        // FIXME handle in reader
+        InvokeIndirect {
+            sig_ref,
+            ref args,
+            destination,
+            table,
+            ..
+        } => {
+            let args = args.as_slice(pool);
+            write!(
+                w,
+                " {}, {}({}), {}, {}",
+                sig_ref,
+                args[0],
+                DisplayValues(&args[1..]),
+                destination,
+                table,
             )
         }
         FuncAddr { func_ref, .. } => write!(w, " {}", func_ref),

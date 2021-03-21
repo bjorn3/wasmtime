@@ -1798,7 +1798,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Brif
         | Opcode::Brff
         | Opcode::IndirectJumpTableBr
-        | Opcode::BrTable => {
+        | Opcode::BrTable
+        | Opcode::Invoke
+        | Opcode::InvokeIndirect => {
             panic!("Branch opcode reached non-branch lowering logic!");
         }
 
@@ -3300,6 +3302,8 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     }),
                 });
             }
+
+            Opcode::Invoke | Opcode::InvokeIndirect => todo!("invoke"),
 
             _ => panic!("Unknown branch type!"),
         }

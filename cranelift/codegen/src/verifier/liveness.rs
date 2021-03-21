@@ -9,6 +9,8 @@ use crate::regalloc::liverange::LiveRange;
 use crate::timing;
 use crate::verifier::{VerifierErrors, VerifierStepResult};
 
+// FIXME handle return val of invoke and invoke_indirect not being available on abnormal return.
+
 /// Verify liveness information for `func`.
 ///
 /// The provided control flow graph is assumed to be sound.
