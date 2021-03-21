@@ -1536,6 +1536,36 @@ pub(crate) fn emit(
             }
         }
 
+        Inst::InvokeKnown {
+            dest,
+            opcode,
+            default,
+            alternatives,
+            ..
+        } => {
+            Inst::CallKnown {
+                dest: dest.clone(),
+                uses: vec![],
+                defs: vec![],
+                opcode: *opcode,
+            }
+            .emit(sink, info, state);
+
+            let br_start = sink.cur_offset();
+            let br_disp_off = br_start + 1;
+
+            for &alt in alternatives {
+                sink.use_label_at_offset(br_disp_off, alt, LabelUse::Ghost);
+            }
+            sink.use_label_at_offset(br_disp_off, *default, LabelUse::JmpRel32);
+
+            // FIXME enroll in the branch inversion mechanism in some way.
+
+            sink.put1(0xE9);
+            // Placeholder for the label value.
+            sink.put4(0x0);
+        }
+
         Inst::CallUnknown { dest, opcode, .. } => {
             if info.flags().enable_probestack() {
                 sink.add_trap(state.cur_srcloc(), TrapCode::StackOverflow);
@@ -1577,6 +1607,36 @@ pub(crate) fn emit(
                 let loc = state.cur_srcloc();
                 sink.add_call_site(loc, *opcode);
             }
+        }
+
+        Inst::InvokeUnknown {
+            dest,
+            opcode,
+            default,
+            alternatives,
+            ..
+        } => {
+            Inst::CallUnknown {
+                dest: dest.clone(),
+                uses: vec![],
+                defs: vec![],
+                opcode: *opcode,
+            }
+            .emit(sink, info, state);
+
+            let br_start = sink.cur_offset();
+            let br_disp_off = br_start + 1;
+
+            for &alt in alternatives {
+                sink.use_label_at_offset(br_disp_off, alt, LabelUse::Ghost);
+            }
+            sink.use_label_at_offset(br_disp_off, *default, LabelUse::JmpRel32);
+
+            // FIXME enroll in the branch inversion mechanism in some way.
+
+            sink.put1(0xE9);
+            // Placeholder for the label value.
+            sink.put4(0x0);
         }
 
         Inst::Ret {} => sink.put1(0xC3),

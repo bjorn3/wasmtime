@@ -340,12 +340,36 @@ pub enum Inst {
         opcode: Opcode,
     },
 
+    /// Direct invoke call: call simm32; jmp default/simm32.
+    /// This instruction will jump to the `default` block by default, but is allowed to jump to any
+    /// of the blocks in `alternatives` when for example an exception occurs.
+    InvokeKnown {
+        dest: ExternalName,
+        uses: Vec<Reg>,
+        defs: Vec<Writable<Reg>>,
+        opcode: Opcode,
+        default: MachLabel,
+        alternatives: SmallVec<[MachLabel; 1]>,
+    },
+
     /// Indirect call: callq (reg mem).
     CallUnknown {
         dest: RegMem,
         uses: Vec<Reg>,
         defs: Vec<Writable<Reg>>,
         opcode: Opcode,
+    },
+
+    /// Indirect invoke call: callq (reg mem); jmp default/simm32.
+    /// This instruction will jump to the `default` block by default, but is allowed to jump to any
+    /// of the blocks in `alternatives` when for example an exception occurs.
+    InvokeUnknown {
+        dest: RegMem,
+        uses: Vec<Reg>,
+        defs: Vec<Writable<Reg>>,
+        opcode: Opcode,
+        default: MachLabel,
+        alternatives: SmallVec<[MachLabel; 1]>,
     },
 
     /// Return.
@@ -508,7 +532,9 @@ impl Inst {
             Inst::AluRmiR { .. }
             | Inst::AtomicRmwSeq { .. }
             | Inst::CallKnown { .. }
+            | Inst::InvokeKnown { .. }
             | Inst::CallUnknown { .. }
+            | Inst::InvokeUnknown { .. }
             | Inst::CheckedDivOrRemSeq { .. }
             | Inst::Cmove { .. }
             | Inst::CmpRmiR { .. }
@@ -1699,10 +1725,36 @@ impl PrettyPrint for Inst {
 
             Inst::CallKnown { dest, .. } => format!("{} {:?}", ljustify("call".to_string()), dest),
 
+            Inst::InvokeKnown {
+                dest,
+                default,
+                alternatives,
+                ..
+            } => format!(
+                "{} {:?}; jmp {} (alternatives={:?})",
+                ljustify("call".to_string()),
+                dest,
+                default.to_string(),
+                alternatives
+            ),
+
             Inst::CallUnknown { dest, .. } => format!(
                 "{} *{}",
                 ljustify("call".to_string()),
                 dest.show_rru(mb_rru)
+            ),
+
+            Inst::InvokeUnknown {
+                dest,
+                default,
+                alternatives,
+                ..
+            } => format!(
+                "{} {:?}; jmp {} (alternatives={:?})",
+                ljustify("call".to_string()),
+                dest.show_rru(mb_rru),
+                default.to_string(),
+                alternatives
             ),
 
             Inst::Ret => "ret".to_string(),
@@ -1998,12 +2050,21 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
 
         Inst::CallKnown {
             ref uses, ref defs, ..
+        }
+        | Inst::InvokeKnown {
+            ref uses, ref defs, ..
         } => {
             collector.add_uses(uses);
             collector.add_defs(defs);
         }
 
         Inst::CallUnknown {
+            ref uses,
+            ref defs,
+            dest,
+            ..
+        }
+        | Inst::InvokeUnknown {
             ref uses,
             ref defs,
             dest,
@@ -2408,6 +2469,11 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut uses,
             ref mut defs,
             ..
+        }
+        | Inst::InvokeKnown {
+            ref mut uses,
+            ref mut defs,
+            ..
         } => {
             for r in uses.iter_mut() {
                 map_use(mapper, r);
@@ -2418,6 +2484,12 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         }
 
         Inst::CallUnknown {
+            ref mut uses,
+            ref mut defs,
+            ref mut dest,
+            ..
+        }
+        | Inst::InvokeUnknown {
             ref mut uses,
             ref mut defs,
             ref mut dest,
@@ -2843,6 +2915,10 @@ pub enum LabelUse {
     /// A 32-bit offset from location of relocation itself, added to the existing value at that
     /// location.
     PCRel32,
+
+    /// A ghost use of a label. This will not cause any relocation to be emitted, but will still be
+    /// counted as a use.
+    Ghost,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -2850,19 +2926,20 @@ impl MachInstLabelUse for LabelUse {
 
     fn max_pos_range(self) -> CodeOffset {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 => 0x7fff_ffff,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::Ghost => 0x7fff_ffff,
         }
     }
 
     fn max_neg_range(self) -> CodeOffset {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 => 0x8000_0000,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::Ghost => 0x8000_0000,
         }
     }
 
     fn patch_size(self) -> CodeOffset {
         match self {
             LabelUse::JmpRel32 | LabelUse::PCRel32 => 4,
+            LabelUse::Ghost => 0,
         }
     }
 
@@ -2872,6 +2949,7 @@ impl MachInstLabelUse for LabelUse {
         debug_assert!(pc_rel >= -(self.max_neg_range() as i64));
         let pc_rel = pc_rel as u32;
         match self {
+            LabelUse::Ghost => {}
             LabelUse::JmpRel32 => {
                 let addend = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
                 let value = pc_rel.wrapping_add(addend).wrapping_sub(4);
@@ -2887,19 +2965,19 @@ impl MachInstLabelUse for LabelUse {
 
     fn supports_veneer(self) -> bool {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 => false,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::Ghost => false,
         }
     }
 
     fn veneer_size(self) -> CodeOffset {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 => 0,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::Ghost => 0,
         }
     }
 
     fn generate_veneer(self, _: &mut [u8], _: CodeOffset) -> (CodeOffset, LabelUse) {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 => {
+            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::Ghost => {
                 panic!("Veneer not supported for JumpRel32 label-use.");
             }
         }
