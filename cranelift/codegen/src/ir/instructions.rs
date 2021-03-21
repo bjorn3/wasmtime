@@ -427,8 +427,14 @@ impl InstructionData {
         match *self {
             Self::Call {
                 func_ref, ref args, ..
+            }
+            | Self::Invoke {
+                func_ref, ref args, ..
             } => CallInfo::Direct(func_ref, args.as_slice(pool)),
             Self::CallIndirect {
+                sig_ref, ref args, ..
+            }
+            | Self::InvokeIndirect {
                 sig_ref, ref args, ..
             } => CallInfo::Indirect(sig_ref, &args.as_slice(pool)[1..]),
             _ => {
