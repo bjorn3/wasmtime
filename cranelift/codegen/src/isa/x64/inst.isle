@@ -319,9 +319,25 @@
        (CallKnown (dest ExternalName)
                   (info BoxCallInfo))
 
+       ;; Direct invoke call: call simm32; jmp default/simm32.
+       ;; This instruction will jump to the `default` block by default, but is allowed to jump to any
+       ;; of the blocks in `alternatives` when for example an exception occurs.
+       (InvokeKnown (dest ExternalName)
+                    (info BoxCallInfo)
+                    (default MachLabel)
+                    (alternatives BoxVecMachLabel))
+
        ;; Indirect call: callq (reg mem)
        (CallUnknown (dest RegMem)
                     (info BoxCallInfo))
+
+       ;; Indirect invoke call: callq (reg mem); jmp default/simm32.
+       ;; This instruction will jump to the `default` block by default, but is allowed to jump to any
+       ;; of the blocks in `alternatives` when for example an exception occurs.
+       (InvokeUnknown (dest RegMem)
+                      (info BoxCallInfo)
+                      (default MachLabel)
+                      (alternatives BoxVecMachLabel))
 
        ;; Return.
        (Ret (rets VecReg))

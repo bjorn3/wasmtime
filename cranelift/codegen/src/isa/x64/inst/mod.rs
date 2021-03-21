@@ -69,7 +69,9 @@ impl Inst {
             | Inst::AluRM { .. }
             | Inst::AtomicRmwSeq { .. }
             | Inst::CallKnown { .. }
+            | Inst::InvokeKnown { .. }
             | Inst::CallUnknown { .. }
+            | Inst::InvokeUnknown { .. }
             | Inst::CheckedDivOrRemSeq { .. }
             | Inst::Cmove { .. }
             | Inst::CmpRmiR { .. }
@@ -1434,9 +1436,38 @@ impl PrettyPrint for Inst {
 
             Inst::CallKnown { dest, .. } => format!("{} {:?}", ljustify("call".to_string()), dest),
 
+            Inst::InvokeKnown {
+                dest,
+                default,
+                alternatives,
+                ..
+            } => format!(
+                "{} {:?}; jmp {} (alternatives={:?})",
+                ljustify("call".to_string()),
+                dest,
+                default.to_string(),
+                alternatives
+            ),
+
             Inst::CallUnknown { dest, .. } => {
                 let dest = dest.pretty_print(8, allocs);
                 format!("{} *{}", ljustify("call".to_string()), dest)
+            }
+
+            Inst::InvokeUnknown {
+                dest,
+                default,
+                alternatives,
+                ..
+            } => {
+                let dest = dest.pretty_print(8, allocs);
+                format!(
+                    "{} {:?}; jmp {} (alternatives={:?})",
+                    ljustify("call".to_string()),
+                    dest,
+                    default.to_string(),
+                    alternatives
+                )
             }
 
             Inst::Ret { .. } => "ret".to_string(),
@@ -1947,7 +1978,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_def(dst.to_writable_reg());
         }
 
-        Inst::CallKnown { ref info, .. } => {
+        Inst::CallKnown { ref info, .. } | Inst::InvokeKnown { ref info, .. } => {
             for &u in &info.uses {
                 collector.reg_use(u);
             }
@@ -1957,7 +1988,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_clobbers(info.clobbers);
         }
 
-        Inst::CallUnknown { ref info, dest, .. } => {
+        Inst::CallUnknown { ref info, dest, .. } | Inst::InvokeUnknown { ref info, dest, .. } => {
             dest.get_operands(collector);
             for &u in &info.uses {
                 collector.reg_use(u);
@@ -2417,6 +2448,10 @@ pub enum LabelUse {
     /// A 32-bit offset from location of relocation itself, added to the existing value at that
     /// location.
     PCRel32,
+
+    /// A ghost use of a label. This will not cause any relocation to be emitted, but will still be
+    /// counted as a use.
+    Ghost,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -2424,19 +2459,20 @@ impl MachInstLabelUse for LabelUse {
 
     fn max_pos_range(self) -> CodeOffset {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 => 0x7fff_ffff,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::Ghost => 0x7fff_ffff,
         }
     }
 
     fn max_neg_range(self) -> CodeOffset {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 => 0x8000_0000,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::Ghost => 0x8000_0000,
         }
     }
 
     fn patch_size(self) -> CodeOffset {
         match self {
             LabelUse::JmpRel32 | LabelUse::PCRel32 => 4,
+            LabelUse::Ghost => 0,
         }
     }
 
@@ -2446,6 +2482,7 @@ impl MachInstLabelUse for LabelUse {
         debug_assert!(pc_rel >= -(self.max_neg_range() as i64));
         let pc_rel = pc_rel as u32;
         match self {
+            LabelUse::Ghost => {}
             LabelUse::JmpRel32 => {
                 let addend = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
                 let value = pc_rel.wrapping_add(addend).wrapping_sub(4);
@@ -2461,19 +2498,19 @@ impl MachInstLabelUse for LabelUse {
 
     fn supports_veneer(self) -> bool {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 => false,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::Ghost => false,
         }
     }
 
     fn veneer_size(self) -> CodeOffset {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 => 0,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::Ghost => 0,
         }
     }
 
     fn generate_veneer(self, _: &mut [u8], _: CodeOffset) -> (CodeOffset, LabelUse) {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 => {
+            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::Ghost => {
                 panic!("Veneer not supported for JumpRel32 label-use.");
             }
         }
