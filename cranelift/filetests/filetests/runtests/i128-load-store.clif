@@ -1,5 +1,5 @@
 test run
-target x86_64 machinst
+target x86_64
 target aarch64
 
 function %i128_stack_store_load(i64, i64) -> b1 {
