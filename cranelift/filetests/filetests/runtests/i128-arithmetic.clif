@@ -1,7 +1,7 @@
 test run
 target aarch64
 ; target s390x TODO: Not yet implemented on s390x
-target x86_64
+target x86_64 machinst
 
 ; TODO: Cleanup these tests when we have native support for i128 immediates in CLIF's parser
 

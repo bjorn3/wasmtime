@@ -1,6 +1,6 @@
 test run
 target aarch64
-target x86_64
+target x86_64 machinst
 
 ; TODO: Cleanup these tests when we have native support for i128 immediates in CLIF's parser
 function %icmp_eq_i128(i64, i64, i64, i64) -> b1 {
