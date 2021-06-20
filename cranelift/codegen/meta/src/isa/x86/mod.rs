@@ -1,8 +1,6 @@
 use crate::cdsl::cpu_modes::CpuMode;
-use crate::cdsl::instructions::{InstructionGroupBuilder, InstructionPredicateMap};
+use crate::cdsl::instructions::InstructionGroupBuilder;
 use crate::cdsl::isa::TargetIsa;
-use crate::cdsl::recipes::Recipes;
-use crate::cdsl::regs::IsaRegsBuilder;
 use crate::cdsl::xform::TransformGroupBuilder;
 
 use crate::shared::Definitions as SharedDefinitions;
@@ -34,9 +32,6 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
         "x86",
         inst_group,
         settings,
-        IsaRegsBuilder::new().build(),
-        Recipes::new(),
         cpu_modes,
-        InstructionPredicateMap::new(),
     )
 }

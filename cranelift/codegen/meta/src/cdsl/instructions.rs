@@ -1,7 +1,6 @@
 use cranelift_codegen_shared::condcodes::IntCC;
 use cranelift_entity::{entity_impl, PrimaryMap};
 
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Error, Formatter};
 use std::rc::Rc;
@@ -1228,43 +1227,6 @@ impl InstructionPredicate {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct InstructionPredicateNumber(u32);
 entity_impl!(InstructionPredicateNumber);
-
-pub(crate) type InstructionPredicateMap =
-    PrimaryMap<InstructionPredicateNumber, InstructionPredicate>;
-
-/// A registry of predicates to help deduplicating them, during Encodings construction. When the
-/// construction process is over, it needs to be extracted with `extract` and associated to the
-/// TargetIsa.
-pub(crate) struct InstructionPredicateRegistry {
-    /// Maps a predicate number to its actual predicate.
-    map: InstructionPredicateMap,
-
-    /// Inverse map: maps a predicate to its predicate number. This is used before inserting a
-    /// predicate, to check whether it already exists.
-    inverted_map: HashMap<InstructionPredicate, InstructionPredicateNumber>,
-}
-
-impl InstructionPredicateRegistry {
-    pub fn new() -> Self {
-        Self {
-            map: PrimaryMap::new(),
-            inverted_map: HashMap::new(),
-        }
-    }
-    pub fn insert(&mut self, predicate: InstructionPredicate) -> InstructionPredicateNumber {
-        match self.inverted_map.get(&predicate) {
-            Some(&found) => found,
-            None => {
-                let key = self.map.push(predicate.clone());
-                self.inverted_map.insert(predicate, key);
-                key
-            }
-        }
-    }
-    pub fn extract(self) -> InstructionPredicateMap {
-        self.map
-    }
-}
 
 /// An instruction specification, containing an instruction that has bound types or not.
 pub(crate) enum InstSpec {

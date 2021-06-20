@@ -2,9 +2,7 @@ use std::collections::HashSet;
 use std::iter::FromIterator;
 
 use crate::cdsl::cpu_modes::CpuMode;
-use crate::cdsl::instructions::{InstructionGroup, InstructionPredicateMap};
-use crate::cdsl::recipes::Recipes;
-use crate::cdsl::regs::IsaRegs;
+use crate::cdsl::instructions::InstructionGroup;
 use crate::cdsl::settings::SettingGroup;
 use crate::cdsl::xform::{TransformGroupIndex, TransformGroups};
 
@@ -12,10 +10,7 @@ pub(crate) struct TargetIsa {
     pub name: &'static str,
     pub instructions: InstructionGroup,
     pub settings: SettingGroup,
-    pub regs: IsaRegs,
-    pub recipes: Recipes,
     pub cpu_modes: Vec<CpuMode>,
-    pub encodings_predicates: InstructionPredicateMap,
 
     /// TransformGroupIndex are global to all the ISAs, while we want to have indices into the
     /// local array of transform groups that are directly used. We use this map to get this
@@ -28,10 +23,7 @@ impl TargetIsa {
         name: &'static str,
         instructions: InstructionGroup,
         settings: SettingGroup,
-        regs: IsaRegs,
-        recipes: Recipes,
         cpu_modes: Vec<CpuMode>,
-        encodings_predicates: InstructionPredicateMap,
     ) -> Self {
         // Compute the local TransformGroup index.
         let mut local_transform_groups = Vec::new();
@@ -53,10 +45,7 @@ impl TargetIsa {
             name,
             instructions,
             settings,
-            regs,
-            recipes,
             cpu_modes,
-            encodings_predicates,
             local_transform_groups,
         }
     }

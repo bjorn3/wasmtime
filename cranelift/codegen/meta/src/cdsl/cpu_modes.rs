@@ -1,7 +1,6 @@
 use std::collections::{hash_map, HashMap, HashSet};
 use std::iter::FromIterator;
 
-use crate::cdsl::encodings::Encoding;
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::xform::{TransformGroup, TransformGroupIndex};
 
@@ -10,7 +9,6 @@ pub(crate) struct CpuMode {
     default_legalize: Option<TransformGroupIndex>,
     monomorphic_legalize: Option<TransformGroupIndex>,
     typed_legalize: HashMap<ValueType, TransformGroupIndex>,
-    pub encodings: Vec<Encoding>,
 }
 
 impl CpuMode {
@@ -20,13 +18,7 @@ impl CpuMode {
             default_legalize: None,
             monomorphic_legalize: None,
             typed_legalize: HashMap::new(),
-            encodings: Vec::new(),
         }
-    }
-
-    pub fn set_encodings(&mut self, encodings: Vec<Encoding>) {
-        assert!(self.encodings.is_empty(), "clobbering encodings");
-        self.encodings = encodings;
     }
 
     pub fn legalize_monomorphic(&mut self, group: &TransformGroup) {
