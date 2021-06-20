@@ -2,9 +2,7 @@
 
 use crate::binemit;
 use crate::ir;
-use crate::isa::{
-    EncInfo, Encoding, Encodings, Legalize, RegClass, RegInfo, TargetIsa,
-};
+use crate::isa::{Encodings, Legalize, RegClass, RegInfo, TargetIsa};
 use crate::machinst::*;
 use crate::regalloc::RegisterSet;
 use crate::settings::{self, Flags};
@@ -68,33 +66,12 @@ impl TargetIsa for TargetIsaAdapter {
         self.backend.hash_all_flags(hasher);
     }
 
-    fn register_info(&self) -> RegInfo {
-        // Called from function's Display impl, so we need a stub here.
-        RegInfo {
-            banks: &[],
-            classes: &[],
-        }
-    }
-
     fn legal_encodings<'a>(
         &'a self,
         _func: &'a ir::Function,
         _inst: &'a ir::InstructionData,
         _ctrl_typevar: ir::Type,
     ) -> Encodings<'a> {
-        panic!("Should not be called when new-style backend is available!")
-    }
-
-    fn encode(
-        &self,
-        _func: &ir::Function,
-        _inst: &ir::InstructionData,
-        _ctrl_typevar: ir::Type,
-    ) -> Result<Encoding, Legalize> {
-        panic!("Should not be called when new-style backend is available!")
-    }
-
-    fn encoding_info(&self) -> EncInfo {
         panic!("Should not be called when new-style backend is available!")
     }
 

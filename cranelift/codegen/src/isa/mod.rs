@@ -48,7 +48,6 @@ pub use crate::isa::constraints::{
     BranchRange, ConstraintKind, OperandConstraint, RecipeConstraints,
 };
 pub use crate::isa::enc_tables::Encodings;
-pub use crate::isa::encoding::{base_size, EncInfo, Encoding};
 pub use crate::isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
 pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 
@@ -89,7 +88,6 @@ pub mod unwind;
 mod call_conv;
 mod constraints;
 mod enc_tables;
-mod encoding;
 pub mod registers;
 mod stack;
 
@@ -305,9 +303,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         false
     }
 
-    /// Get a data structure describing the registers in this ISA.
-    fn register_info(&self) -> RegInfo;
-
     #[cfg(feature = "unwind")]
     /// Map a Cranelift register to its corresponding DWARF register.
     fn map_dwarf_register(&self, _: RegUnit) -> Result<u16, RegisterMappingError> {
@@ -319,33 +314,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     fn map_regalloc_reg_to_dwarf(&self, _: ::regalloc::Reg) -> Result<u16, RegisterMappingError> {
         Err(RegisterMappingError::UnsupportedArchitecture)
     }
-
-    /// Returns an iterator over legal encodings for the instruction.
-    fn legal_encodings<'a>(
-        &'a self,
-        func: &'a ir::Function,
-        inst: &'a ir::InstructionData,
-        ctrl_typevar: ir::Type,
-    ) -> Encodings<'a>;
-
-    /// Encode an instruction after determining it is legal.
-    ///
-    /// If `inst` can legally be encoded in this ISA, produce the corresponding `Encoding` object.
-    /// Otherwise, return `Legalize` action.
-    ///
-    /// This is also the main entry point for determining if an instruction is legal.
-    fn encode(
-        &self,
-        func: &ir::Function,
-        inst: &ir::InstructionData,
-        ctrl_typevar: ir::Type,
-    ) -> Result<Encoding, Legalize> {
-        let mut iter = self.legal_encodings(func, inst, ctrl_typevar);
-        iter.next().ok_or_else(|| iter.legalize())
-    }
-
-    /// Get a data structure describing the instruction encodings in this ISA.
-    fn encoding_info(&self) -> EncInfo;
 
     /// Legalize a function signature.
     ///

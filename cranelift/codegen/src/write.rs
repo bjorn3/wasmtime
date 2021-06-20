@@ -7,7 +7,7 @@ use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
 use crate::ir::{
     Block, DataFlowGraph, DisplayFunctionAnnotations, Function, Inst, SigRef, Type, Value,
-    ValueDef, ValueLoc,
+    ValueDef,
 };
 use crate::isa::{RegInfo, TargetIsa};
 use crate::packed_option::ReservedValue;
@@ -45,9 +45,8 @@ pub trait FuncWriter {
         &mut self,
         w: &mut dyn Write,
         func: &Function,
-        regs: Option<&RegInfo>,
     ) -> Result<bool, fmt::Error> {
-        self.super_preamble(w, func, regs)
+        self.super_preamble(w, func)
     }
 
     /// Default impl of `write_preamble`
@@ -55,7 +54,6 @@ pub trait FuncWriter {
         &mut self,
         w: &mut dyn Write,
         func: &Function,
-        regs: Option<&RegInfo>,
     ) -> Result<bool, fmt::Error> {
         let mut any = false;
 
@@ -198,14 +196,11 @@ pub fn decorate_function<FW: FuncWriter>(
     func: &Function,
     annotations: &DisplayFunctionAnnotations,
 ) -> fmt::Result {
-    let regs = annotations.isa.map(TargetIsa::register_info);
-    let regs = regs.as_ref();
-
     write!(w, "function ")?;
     write_spec(w, func, regs)?;
     writeln!(w, " {{")?;
     let aliases = alias_map(func);
-    let mut any = func_w.write_preamble(w, func, regs)?;
+    let mut any = func_w.write_preamble(w, func)?;
     for block in &func.layout {
         if any {
             writeln!(w)?;
@@ -280,9 +275,6 @@ pub fn write_block_header(
 
 fn write_valueloc(w: &mut dyn Write, loc: LabelValueLoc, regs: &RegInfo) -> fmt::Result {
     match loc {
-        LabelValueLoc::ValueLoc(ValueLoc::Reg(r)) => write!(w, "{}", regs.display_regunit(r)),
-        LabelValueLoc::ValueLoc(ValueLoc::Stack(ss)) => write!(w, "{}", ss),
-        LabelValueLoc::ValueLoc(ValueLoc::Unassigned) => write!(w, "?"),
         LabelValueLoc::Reg(r) => write!(w, "{:?}", r),
         LabelValueLoc::SPOffset(off) => write!(w, "[sp+{}]", off),
     }
@@ -340,22 +332,6 @@ fn decorate_block<FW: FuncWriter>(
     func_w.write_block_header(w, func, isa, block, indent)?;
     for a in func.dfg.block_params(block).iter().cloned() {
         write_value_aliases(w, aliases, a, indent)?;
-    }
-
-    if let Some(isa) = isa {
-        if !func.offsets.is_empty() {
-            let encinfo = isa.encoding_info();
-            let regs = &isa.register_info();
-            for (offset, inst, size) in func.inst_offsets(block, &encinfo) {
-                func_w.write_instruction(w, func, aliases, Some(isa), inst, indent)?;
-                if size > 0 {
-                    if let Some(val_ranges) = annotations.value_ranges {
-                        write_value_range_markers(w, val_ranges, regs, offset + size, indent)?;
-                    }
-                }
-            }
-            return Ok(());
-        }
     }
 
     for inst in func.layout.block_insts(block) {
@@ -436,23 +412,6 @@ fn write_instruction(
     let srcloc = func.srclocs[inst];
     if !srcloc.is_default() {
         write!(s, "{} ", srcloc)?;
-    }
-
-    // Write out encoding info.
-    if let Some(enc) = func.encodings.get(inst).cloned() {
-        if let Some(isa) = isa {
-            write!(s, "[{}", isa.encoding_info().display(enc))?;
-            // Write value locations, if we have them.
-            if !func.locations.is_empty() {
-                let regs = isa.register_info();
-                for &r in func.dfg.inst_results(inst) {
-                    write!(s, ",{}", func.locations[r].display(&regs))?
-                }
-            }
-            write!(s, "] ")?;
-        } else {
-            write!(s, "[{}] ", enc)?;
-        }
     }
 
     // Write out prefix and indent the instruction.

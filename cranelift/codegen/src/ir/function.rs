@@ -14,7 +14,7 @@ use crate::ir::{
 use crate::ir::{BlockOffsets, InstEncodings, SourceLocs, StackSlots, ValueLocations};
 use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
 use crate::ir::{JumpTableOffsets, JumpTables};
-use crate::isa::{CallConv, EncInfo, Encoding, Legalize, TargetIsa};
+use crate::isa::{CallConv, Legalize, TargetIsa};
 use crate::regalloc::{EntryRegDiversions, RegDiversions};
 use crate::value_label::ValueLabelsRanges;
 use crate::write::write_function;
@@ -268,32 +268,6 @@ impl Function {
             .map(|i| self.dfg.block_params(entry)[i])
     }
 
-    /// Get an iterator over the instructions in `block`, including offsets and encoded instruction
-    /// sizes.
-    ///
-    /// The iterator returns `(offset, inst, size)` tuples, where `offset` if the offset in bytes
-    /// from the beginning of the function to the instruction, and `size` is the size of the
-    /// instruction in bytes, or 0 for unencoded instructions.
-    ///
-    /// This function can only be used after the code layout has been computed by the
-    /// `binemit::relax_branches()` function.
-    pub fn inst_offsets<'a>(&'a self, block: Block, encinfo: &EncInfo) -> InstOffsetIter<'a> {
-        assert!(
-            !self.offsets.is_empty(),
-            "Code layout must be computed first"
-        );
-        let mut divert = RegDiversions::new();
-        divert.at_block(&self.entry_diversions, block);
-        InstOffsetIter {
-            encinfo: encinfo.clone(),
-            func: self,
-            divert,
-            encodings: &self.encodings,
-            offset: self.offsets[block],
-            iter: self.layout.block_insts(block),
-        }
-    }
-
     /// Wrapper around `encode` which assigns `inst` the resulting encoding.
     pub fn update_encoding(&mut self, inst: ir::Inst, isa: &dyn TargetIsa) -> Result<(), Legalize> {
         if isa.get_mach_backend().is_some() {
@@ -460,31 +434,5 @@ impl fmt::Display for Function {
 impl fmt::Debug for Function {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write_function(fmt, self, &DisplayFunctionAnnotations::default())
-    }
-}
-
-/// Iterator returning instruction offsets and sizes: `(offset, inst, size)`.
-pub struct InstOffsetIter<'a> {
-    encinfo: EncInfo,
-    divert: RegDiversions,
-    func: &'a Function,
-    encodings: &'a InstEncodings,
-    offset: CodeOffset,
-    iter: ir::layout::Insts<'a>,
-}
-
-impl<'a> Iterator for InstOffsetIter<'a> {
-    type Item = (CodeOffset, ir::Inst, CodeOffset);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|inst| {
-            self.divert.apply(&self.func.dfg[inst]);
-            let byte_size =
-                self.encinfo
-                    .byte_size(self.encodings[inst], inst, &self.divert, self.func);
-            let offset = self.offset;
-            self.offset += byte_size;
-            (offset, inst, byte_size)
-        })
     }
 }

@@ -402,23 +402,7 @@ pub fn do_postopt(func: &mut Function, isa: &dyn TargetIsa) {
     let mut pos = EncCursor::new(func, isa);
     let is_mach_backend = isa.get_mach_backend().is_some();
     while let Some(_block) = pos.next_block() {
-        let mut last_flags_clobber = None;
         while let Some(inst) = pos.next_inst() {
-            if !is_mach_backend && isa.uses_cpu_flags() {
-                // Optimize instructions to make use of flags.
-                optimize_cpu_flags(&mut pos, inst, last_flags_clobber, isa);
-
-                // Track the most recent seen instruction that clobbers the flags.
-                if let Some(constraints) = isa
-                    .encoding_info()
-                    .operand_constraints(pos.func.encodings[inst])
-                {
-                    if constraints.clobbers_flags {
-                        last_flags_clobber = Some(inst)
-                    }
-                }
-            }
-
             if isa.uses_complex_addresses() {
                 optimize_complex_addresses(&mut pos, inst, isa);
             }
