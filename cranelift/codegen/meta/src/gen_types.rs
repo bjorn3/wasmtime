@@ -32,12 +32,11 @@ pub(crate) fn generate(filename: &str, out_dir: &str) -> Result<(), error::Error
     // Emit vector definitions for common SIMD sizes.
     for vec_size in &[64_u64, 128, 256, 512] {
         let vec_size: u64 = vec_size / 8;
-        for vec in cdsl_types::ValueType::all_lane_types()
-            .map(|ty| (ty, cdsl_types::ValueType::from(ty).membytes()))
-            .filter(|&(_, lane_size)| lane_size != 0 && lane_size < vec_size)
-            .map(|(ty, lane_size)| (ty, vec_size / lane_size))
-            .map(|(ty, lanes)| cdsl_types::VectorType::new(ty, lanes))
+        for (ty, lanes) in cdsl_types::ValueType::all_lane_types()
+            .filter(|ty| ty.membytes() != 0 && ty.membytes() < vec_size)
+            .map(|ty| (ty, vec_size / ty.membytes()))
         {
+            let vec = cdsl_types::VectorType::new(ty, lanes);
             emit_type(&cdsl_types::ValueType::from(vec), fmt);
         }
     }

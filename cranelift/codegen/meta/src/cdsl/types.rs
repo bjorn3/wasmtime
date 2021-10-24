@@ -38,29 +38,6 @@ impl ValueType {
         }
     }
 
-    /// Return the number of bits in a lane.
-    pub fn lane_bits(&self) -> u64 {
-        match *self {
-            ValueType::Lane(l) => l.lane_bits(),
-            ValueType::Reference(r) => r.lane_bits(),
-            ValueType::Special(s) => s.lane_bits(),
-            ValueType::Vector(ref v) => v.lane_bits(),
-        }
-    }
-
-    /// Return the number of lanes.
-    pub fn lane_count(&self) -> u64 {
-        match *self {
-            ValueType::Vector(ref v) => v.lane_count(),
-            _ => 1,
-        }
-    }
-
-    /// Find the number of bytes that this type occupies in memory.
-    pub fn membytes(&self) -> u64 {
-        self.width() / 8
-    }
-
     /// Find the unique number associated with this type.
     pub fn number(&self) -> u8 {
         match *self {
@@ -74,18 +51,6 @@ impl ValueType {
     /// Return the name of this type for generated Rust source files.
     pub fn rust_name(&self) -> String {
         format!("{}{}", _RUST_NAME_PREFIX, self.to_string().to_uppercase())
-    }
-
-    /// Return true iff:
-    ///     1. self and other have equal number of lanes
-    ///     2. each lane in self has at least as many bits as a lane in other
-    pub fn _wider_or_equal(&self, rhs: &ValueType) -> bool {
-        (self.lane_count() == rhs.lane_count()) && (self.lane_bits() >= rhs.lane_bits())
-    }
-
-    /// Return the total number of bits of an instance of this type.
-    pub fn width(&self) -> u64 {
-        self.lane_count() * self.lane_bits()
     }
 }
 
@@ -162,6 +127,11 @@ impl LaneType {
             LaneType::Float(ref f) => *f as u64,
             LaneType::Int(ref i) => *i as u64,
         }
+    }
+
+    /// Find the number of bytes that this type occupies in memory.
+    pub fn membytes(&self) -> u64 {
+        self.lane_bits() / 8
     }
 
     /// Find the unique number associated with this lane type.
@@ -328,11 +298,6 @@ impl VectorType {
         )
     }
 
-    /// Return the number of bits in a lane.
-    pub fn lane_bits(&self) -> u64 {
-        self.base.lane_bits()
-    }
-
     /// Return the number of lanes.
     pub fn lane_count(&self) -> u64 {
         self.lanes
@@ -392,13 +357,6 @@ impl SpecialType {
                 "CPU flags representing the result of a floating point comparison. These
                 flags can be tested with a :type:`floatcc` condition code.",
             ),
-        }
-    }
-
-    /// Return the number of bits in a lane.
-    pub fn lane_bits(self) -> u64 {
-        match self {
-            SpecialType::Flag(_) => 0,
         }
     }
 }
