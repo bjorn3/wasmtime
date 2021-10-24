@@ -151,12 +151,6 @@ impl LaneType {
                 *binary64* interchange format. This corresponds to the :c:type:`double`
                 type in most C implementations.",
             ),
-            LaneType::Int(_) if self.lane_bits() < 32 => format!(
-                "An integer type with {} bits.
-                WARNING: arithmetic on {}bit integers is incomplete",
-                self.lane_bits(),
-                self.lane_bits()
-            ),
             LaneType::Int(_) => format!("An integer type with {} bits.", self.lane_bits()),
         }
     }
