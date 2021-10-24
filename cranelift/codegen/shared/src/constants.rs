@@ -17,11 +17,3 @@ pub const LANE_BASE: u8 = 0x70;
 
 /// Start of the 2-lane vector types.
 pub const VECTOR_BASE: u8 = 0x80;
-
-// Some constants about register classes and types.
-
-/// Guaranteed maximum number of top-level register classes with pressure tracking in any ISA.
-pub const MAX_TRACKED_TOP_RCS: usize = 4;
-
-/// Guaranteed maximum number of register classes in any ISA.
-pub const MAX_NUM_REG_CLASSES: usize = 32;
