@@ -317,7 +317,7 @@ impl Type {
     /// If this is already a SIMD vector type, this produces a SIMD vector type with `n *
     /// self.lane_count()` lanes.
     pub fn by(self, n: u16) -> Option<Self> {
-        if self.lane_bits() == 0 || !n.is_power_of_two() {
+        if self.lane_bits() == 0 || !n.is_power_of_two() || self.is_ref() {
             return None;
         }
         let log2_lanes: u32 = n.trailing_zeros();
@@ -590,6 +590,8 @@ mod tests {
         assert_eq!(F64.by(2).unwrap().to_string(), "f64x2");
         assert_eq!(I8.by(3), None);
         assert_eq!(I8.by(512), None);
+        assert_eq!(IFLAGS.by(2), None);
+        assert_eq!(R32.by(2), None);
         assert_eq!(INVALID.by(4), None);
     }
 
