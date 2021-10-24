@@ -26,10 +26,12 @@ pub(crate) fn generate(filename: &str, out_dir: &str) -> Result<(), error::Error
 
     // Emit scalar and vector definitions.
     for &lanes in &[1_u64, 2, 4, 8, 16, 32, 64] {
-        for ty in cdsl_types::ValueType::all_lane_types() {
-            if lanes == 1 {
+        if lanes == 1 {
+            for ty in cdsl_types::ValueType::all_lane_types() {
                 emit_type(&cdsl_types::ValueType::from(ty), fmt);
-            } else {
+            }
+        } else {
+            for ty in cdsl_types::ValueType::all_lane_types() {
                 let vec = cdsl_types::VectorType::new(ty, lanes);
                 emit_type(&cdsl_types::ValueType::from(vec), fmt);
             }
