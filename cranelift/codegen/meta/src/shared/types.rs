@@ -135,30 +135,6 @@ pub(crate) enum Reference {
     R64 = 64,
 }
 
-/// This provides an iterator through all of the supported reference variants.
-pub(crate) struct ReferenceIterator {
-    index: u8,
-}
-
-impl ReferenceIterator {
-    pub fn new() -> Self {
-        Self { index: 0 }
-    }
-}
-
-impl Iterator for ReferenceIterator {
-    type Item = Reference;
-    fn next(&mut self) -> Option<Self::Item> {
-        let res = match self.index {
-            0 => Some(Reference::R32),
-            1 => Some(Reference::R64),
-            _ => return None,
-        };
-        self.index += 1;
-        res
-    }
-}
-
 #[cfg(test)]
 mod iter_tests {
     use super::*;

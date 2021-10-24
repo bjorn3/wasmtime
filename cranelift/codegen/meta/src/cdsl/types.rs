@@ -28,10 +28,6 @@ impl ValueType {
         LaneTypeIterator::new()
     }
 
-    pub fn all_reference_types() -> ReferenceTypeIterator {
-        ReferenceTypeIterator::new()
-    }
-
     /// Return a string containing the documentation comment for this type.
     pub fn doc(&self) -> String {
         match *self {
@@ -69,7 +65,7 @@ impl ValueType {
     pub fn number(&self) -> u8 {
         match *self {
             ValueType::Lane(l) => l.number(),
-            ValueType::Reference(r) => r.number(),
+            ValueType::Reference(_) => unreachable!(),
             ValueType::Special(_) => unreachable!(),
             ValueType::Vector(ref v) => v.number(),
         }
@@ -458,15 +454,6 @@ impl ReferenceType {
         }
     }
 
-    /// Find the unique number associated with this reference type.
-    pub fn number(self) -> u8 {
-        constants::REFERENCE_BASE
-            + match self {
-                ReferenceType(shared_types::Reference::R32) => 0,
-                ReferenceType(shared_types::Reference::R64) => 1,
-            }
-    }
-
     pub fn ref_from_bits(num_bits: u16) -> ReferenceType {
         ReferenceType(match num_bits {
             32 => shared_types::Reference::R32,
@@ -492,30 +479,5 @@ impl fmt::Debug for ReferenceType {
 impl From<shared_types::Reference> for ReferenceType {
     fn from(r: shared_types::Reference) -> Self {
         ReferenceType(r)
-    }
-}
-
-/// An iterator for different reference types.
-pub(crate) struct ReferenceTypeIterator {
-    reference_iter: shared_types::ReferenceIterator,
-}
-
-impl ReferenceTypeIterator {
-    /// Create a new reference type iterator.
-    fn new() -> Self {
-        Self {
-            reference_iter: shared_types::ReferenceIterator::new(),
-        }
-    }
-}
-
-impl Iterator for ReferenceTypeIterator {
-    type Item = ReferenceType;
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(r) = self.reference_iter.next() {
-            Some(ReferenceType::from(r))
-        } else {
-            None
-        }
     }
 }

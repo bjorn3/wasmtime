@@ -15,9 +15,6 @@
 /// Start of the lane types.
 pub const LANE_BASE: u8 = 0x70;
 
-/// Base for reference types.
-pub const REFERENCE_BASE: u8 = 0x7E;
-
 /// Start of the 2-lane vector types.
 pub const VECTOR_BASE: u8 = 0x80;
 
