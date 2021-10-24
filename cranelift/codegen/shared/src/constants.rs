@@ -5,8 +5,9 @@
 //
 // 0: Void
 // 0x01-0x6f: Special types
+//   0x01-0x02: Flag types
+//   0x03-0x04: Reference types
 // 0x70-0x7d: Lane types
-// 0x7e-0x7f: Reference types
 // 0x80-0xff: Vector types
 //
 // Vector types are encoded with the lane type in the low 4 bits and log2(lanes)
