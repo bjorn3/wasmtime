@@ -9,7 +9,6 @@ pub mod isa;
 
 mod gen_inst;
 mod gen_settings;
-mod gen_types;
 
 mod shared;
 mod unique_table;
@@ -31,7 +30,6 @@ pub fn generate(isas: &[isa::Isa], out_dir: &str) -> Result<(), error::Error> {
         "settings.rs",
         &out_dir,
     )?;
-    gen_types::generate("types.rs", &out_dir)?;
 
     // - per ISA definitions.
     let target_isas = isa::define(isas, &mut shared_defs);

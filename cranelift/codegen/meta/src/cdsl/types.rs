@@ -3,7 +3,6 @@
 use std::fmt;
 
 use crate::shared::types as shared_types;
-use cranelift_codegen_shared::constants;
 
 // Rust name prefix used for the `rust_name` method.
 static _RUST_NAME_PREFIX: &str = "ir::types::";
@@ -23,11 +22,6 @@ pub(crate) enum ValueType {
 }
 
 impl ValueType {
-    /// Iterate through all of the lane types.
-    pub fn all_lane_types() -> LaneTypeIterator {
-        LaneTypeIterator::new()
-    }
-
     /// Return a string containing the documentation comment for this type.
     pub fn doc(&self) -> String {
         match *self {
@@ -35,16 +29,6 @@ impl ValueType {
             ValueType::Reference(r) => r.doc(),
             ValueType::Special(s) => s.doc(),
             ValueType::Vector(ref v) => v.doc(),
-        }
-    }
-
-    /// Find the unique number associated with this type.
-    pub fn number(&self) -> u8 {
-        match *self {
-            ValueType::Lane(l) => l.number(),
-            ValueType::Reference(_) => unreachable!(),
-            ValueType::Special(_) => unreachable!(),
-            ValueType::Vector(ref v) => v.number(),
         }
     }
 
@@ -127,26 +111,6 @@ impl LaneType {
             LaneType::Float(ref f) => *f as u64,
             LaneType::Int(ref i) => *i as u64,
         }
-    }
-
-    /// Find the unique number associated with this lane type.
-    pub fn number(self) -> u8 {
-        constants::LANE_BASE
-            + match self {
-                LaneType::Bool(shared_types::Bool::B1) => 0,
-                LaneType::Bool(shared_types::Bool::B8) => 1,
-                LaneType::Bool(shared_types::Bool::B16) => 2,
-                LaneType::Bool(shared_types::Bool::B32) => 3,
-                LaneType::Bool(shared_types::Bool::B64) => 4,
-                LaneType::Bool(shared_types::Bool::B128) => 5,
-                LaneType::Int(shared_types::Int::I8) => 6,
-                LaneType::Int(shared_types::Int::I16) => 7,
-                LaneType::Int(shared_types::Int::I32) => 8,
-                LaneType::Int(shared_types::Int::I64) => 9,
-                LaneType::Int(shared_types::Int::I128) => 10,
-                LaneType::Float(shared_types::Float::F32) => 11,
-                LaneType::Float(shared_types::Float::F64) => 12,
-            }
     }
 
     pub fn bool_from_bits(num_bits: u16) -> LaneType {
@@ -235,39 +199,6 @@ impl From<shared_types::Int> for LaneType {
     }
 }
 
-/// An iterator for different lane types.
-pub(crate) struct LaneTypeIterator {
-    bool_iter: shared_types::BoolIterator,
-    int_iter: shared_types::IntIterator,
-    float_iter: shared_types::FloatIterator,
-}
-
-impl LaneTypeIterator {
-    /// Create a new lane type iterator.
-    fn new() -> Self {
-        Self {
-            bool_iter: shared_types::BoolIterator::new(),
-            int_iter: shared_types::IntIterator::new(),
-            float_iter: shared_types::FloatIterator::new(),
-        }
-    }
-}
-
-impl Iterator for LaneTypeIterator {
-    type Item = LaneType;
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(b) = self.bool_iter.next() {
-            Some(LaneType::from(b))
-        } else if let Some(i) = self.int_iter.next() {
-            Some(LaneType::from(i))
-        } else if let Some(f) = self.float_iter.next() {
-            Some(LaneType::from(f))
-        } else {
-            None
-        }
-    }
-}
-
 /// A concrete SIMD vector type.
 ///
 /// A vector type has a lane type which is an instance of `LaneType`,
@@ -302,17 +233,6 @@ impl VectorType {
     /// Return the lane type.
     pub fn lane_type(&self) -> LaneType {
         self.base
-    }
-
-    /// Find the unique number associated with this vector type.
-    ///
-    /// Vector types are encoded with the lane type in the low 4 bits and
-    /// log2(lanes) in the high 4 bits, giving a range of 2-256 lanes.
-    pub fn number(&self) -> u8 {
-        let lanes_log_2: u32 = 63 - self.lane_count().leading_zeros();
-        let base_num = u32::from(self.base.number());
-        let num = (lanes_log_2 << 4) + base_num;
-        num as u8
     }
 }
 
