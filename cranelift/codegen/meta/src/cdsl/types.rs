@@ -129,11 +129,6 @@ impl LaneType {
         }
     }
 
-    /// Find the number of bytes that this type occupies in memory.
-    pub fn membytes(&self) -> u64 {
-        self.lane_bits() / 8
-    }
-
     /// Find the unique number associated with this lane type.
     pub fn number(self) -> u8 {
         constants::LANE_BASE
@@ -286,6 +281,7 @@ pub(crate) struct VectorType {
 impl VectorType {
     /// Initialize a new integer type with `n` bits.
     pub fn new(base: LaneType, lanes: u64) -> Self {
+        assert_ne!(lanes, 1);
         Self { base, lanes }
     }
 

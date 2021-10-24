@@ -24,20 +24,15 @@ fn emit_type(ty: &cdsl_types::ValueType, fmt: &mut srcgen::Formatter) {
 pub(crate) fn generate(filename: &str, out_dir: &str) -> Result<(), error::Error> {
     let fmt = &mut srcgen::Formatter::new();
 
-    // Emit all of the lane types, such integers, floats, and booleans.
-    for ty in cdsl_types::ValueType::all_lane_types().map(cdsl_types::ValueType::from) {
-        emit_type(&ty, fmt);
-    }
-
-    // Emit vector definitions for common SIMD sizes.
-    for vec_size in &[64_u64, 128, 256, 512] {
-        let vec_size: u64 = vec_size / 8;
-        for (ty, lanes) in cdsl_types::ValueType::all_lane_types()
-            .filter(|ty| ty.membytes() != 0 && ty.membytes() < vec_size)
-            .map(|ty| (ty, vec_size / ty.membytes()))
-        {
-            let vec = cdsl_types::VectorType::new(ty, lanes);
-            emit_type(&cdsl_types::ValueType::from(vec), fmt);
+    // Emit scalar and vector definitions.
+    for &lanes in &[1_u64, 2, 4, 8, 16, 32, 64] {
+        for ty in cdsl_types::ValueType::all_lane_types() {
+            if lanes == 1 {
+                emit_type(&cdsl_types::ValueType::from(ty), fmt);
+            } else {
+                let vec = cdsl_types::VectorType::new(ty, lanes);
+                emit_type(&cdsl_types::ValueType::from(vec), fmt);
+            }
         }
     }
 
