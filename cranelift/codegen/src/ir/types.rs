@@ -96,6 +96,7 @@ macro_rules! define_scalar_or_lane_types {
         #[doc = $doc_suffix]
         pub const $b128: Type = Type($base + 5);
 
+        // FIXME shows up with a space between A and n.
         #[doc = $doc_prefix]
         #[doc = "n integer type with 8 bits"]
         #[doc = $doc_suffix]
