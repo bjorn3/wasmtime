@@ -127,30 +127,6 @@ pub(crate) enum Flag {
     FFlags,
 }
 
-/// Iterator through the variants of the Flag enum.
-pub(crate) struct FlagIterator {
-    index: u8,
-}
-
-impl FlagIterator {
-    pub fn new() -> Self {
-        Self { index: 0 }
-    }
-}
-
-impl Iterator for FlagIterator {
-    type Item = Flag;
-    fn next(&mut self) -> Option<Self::Item> {
-        let res = match self.index {
-            0 => Some(Flag::IFlags),
-            1 => Some(Flag::FFlags),
-            _ => return None,
-        };
-        self.index += 1;
-        res
-    }
-}
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) enum Reference {
     /// 32-bit reference.

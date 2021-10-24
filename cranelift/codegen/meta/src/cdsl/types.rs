@@ -28,11 +28,6 @@ impl ValueType {
         LaneTypeIterator::new()
     }
 
-    /// Iterate through all of the special types (neither lanes nor vectors).
-    pub fn all_special_types() -> SpecialTypeIterator {
-        SpecialTypeIterator::new()
-    }
-
     pub fn all_reference_types() -> ReferenceTypeIterator {
         ReferenceTypeIterator::new()
     }
@@ -75,7 +70,7 @@ impl ValueType {
         match *self {
             ValueType::Lane(l) => l.number(),
             ValueType::Reference(r) => r.number(),
-            ValueType::Special(s) => s.number(),
+            ValueType::Special(_) => unreachable!(),
             ValueType::Vector(ref v) => v.number(),
         }
     }
@@ -416,14 +411,6 @@ impl SpecialType {
             SpecialType::Flag(_) => 0,
         }
     }
-
-    /// Find the unique number associated with this special type.
-    pub fn number(self) -> u8 {
-        match self {
-            SpecialType::Flag(shared_types::Flag::IFlags) => 1,
-            SpecialType::Flag(shared_types::Flag::FFlags) => 2,
-        }
-    }
 }
 
 impl fmt::Display for SpecialType {
@@ -450,25 +437,6 @@ impl fmt::Debug for SpecialType {
 impl From<shared_types::Flag> for SpecialType {
     fn from(f: shared_types::Flag) -> Self {
         SpecialType::Flag(f)
-    }
-}
-
-pub(crate) struct SpecialTypeIterator {
-    flag_iter: shared_types::FlagIterator,
-}
-
-impl SpecialTypeIterator {
-    fn new() -> Self {
-        Self {
-            flag_iter: shared_types::FlagIterator::new(),
-        }
-    }
-}
-
-impl Iterator for SpecialTypeIterator {
-    type Item = SpecialType;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.flag_iter.next().map(SpecialType::from)
     }
 }
 

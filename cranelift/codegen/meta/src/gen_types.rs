@@ -24,11 +24,6 @@ fn emit_type(ty: &cdsl_types::ValueType, fmt: &mut srcgen::Formatter) {
 pub(crate) fn generate(filename: &str, out_dir: &str) -> Result<(), error::Error> {
     let fmt = &mut srcgen::Formatter::new();
 
-    // Emit all of the special types, such as types for CPU flags.
-    for spec in cdsl_types::ValueType::all_special_types().map(cdsl_types::ValueType::from) {
-        emit_type(&spec, fmt);
-    }
-
     // Emit all of the lane types, such integers, floats, and booleans.
     for ty in cdsl_types::ValueType::all_lane_types().map(cdsl_types::ValueType::from) {
         emit_type(&ty, fmt);
