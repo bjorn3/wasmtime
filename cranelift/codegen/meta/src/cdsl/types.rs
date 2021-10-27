@@ -258,18 +258,21 @@ impl fmt::Debug for VectorType {
 /// Special types cannot be used to form vectors.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum SpecialType {
-    Flag(shared_types::Flag),
+    /// CPU flags from an integer comparison.
+    IFlags,
+    /// CPU flags from a floating point comparison.
+    FFlags,
 }
 
 impl SpecialType {
     /// Return a string containing the documentation comment for this special type.
     pub fn doc(self) -> String {
         match self {
-            SpecialType::Flag(shared_types::Flag::IFlags) => String::from(
+            SpecialType::IFlags => String::from(
                 "CPU flags representing the result of an integer comparison. These flags
                 can be tested with an :type:`intcc` condition code.",
             ),
-            SpecialType::Flag(shared_types::Flag::FFlags) => String::from(
+            SpecialType::FFlags => String::from(
                 "CPU flags representing the result of a floating point comparison. These
                 flags can be tested with a :type:`floatcc` condition code.",
             ),
@@ -280,33 +283,26 @@ impl SpecialType {
 impl fmt::Display for SpecialType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            SpecialType::Flag(shared_types::Flag::IFlags) => write!(f, "iflags"),
-            SpecialType::Flag(shared_types::Flag::FFlags) => write!(f, "fflags"),
+            SpecialType::IFlags => write!(f, "iflags"),
+            SpecialType::FFlags => write!(f, "fflags"),
         }
     }
 }
 
 impl fmt::Debug for SpecialType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match *self {
-                SpecialType::Flag(_) => format!("FlagsType({})", self),
-            }
-        )
-    }
-}
-
-impl From<shared_types::Flag> for SpecialType {
-    fn from(f: shared_types::Flag) -> Self {
-        SpecialType::Flag(f)
+        write!(f, "{}", self)
     }
 }
 
 /// Reference type is scalar type, but not lane type.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct ReferenceType(pub shared_types::Reference);
+pub(crate) enum ReferenceType {
+    /// 32-bit reference.
+    R32 = 32,
+    /// 64-bit reference.
+    R64 = 64,
+}
 
 impl ReferenceType {
     /// Return a string containing the documentation comment for this reference type.
@@ -316,18 +312,18 @@ impl ReferenceType {
 
     /// Return the number of bits in a lane.
     pub fn lane_bits(self) -> u64 {
-        match self.0 {
-            shared_types::Reference::R32 => 32,
-            shared_types::Reference::R64 => 64,
+        match self {
+            ReferenceType::R32 => 32,
+            ReferenceType::R64 => 64,
         }
     }
 
     pub fn ref_from_bits(num_bits: u16) -> ReferenceType {
-        ReferenceType(match num_bits {
-            32 => shared_types::Reference::R32,
-            64 => shared_types::Reference::R64,
+        match num_bits {
+            32 => ReferenceType::R32,
+            64 => ReferenceType::R64,
             _ => unreachable!("unexpected number of bits for a reference type"),
-        })
+        }
     }
 }
 
@@ -340,12 +336,5 @@ impl fmt::Display for ReferenceType {
 impl fmt::Debug for ReferenceType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ReferenceType(bits={})", self.lane_bits())
-    }
-}
-
-/// Create a ReferenceType from a given reference variant.
-impl From<shared_types::Reference> for ReferenceType {
-    fn from(r: shared_types::Reference) -> Self {
-        ReferenceType(r)
     }
 }

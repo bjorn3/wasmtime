@@ -4,7 +4,7 @@ use crate::cdsl::instructions::{
     AllInstructions, InstructionBuilder as Inst, InstructionGroupBuilder,
 };
 use crate::cdsl::operands::Operand;
-use crate::cdsl::types::{LaneType, ValueType};
+use crate::cdsl::types::{LaneType, SpecialType, ValueType};
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
 use crate::shared::formats::Formats;
 use crate::shared::types;
@@ -85,8 +85,8 @@ fn define_control_flow(
         "A scalar integer type",
         TypeSetBuilder::new().ints(Interval::All).build(),
     );
-    let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
-    let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();
+    let iflags: &TypeVar = &ValueType::Special(SpecialType::IFlags).into();
+    let fflags: &TypeVar = &ValueType::Special(SpecialType::FFlags).into();
 
     {
         let Cond = &Operand::new("Cond", &imm.intcc);
@@ -692,8 +692,8 @@ pub(crate) fn define(
     define_simd_arithmetic(&mut ig, formats, imm, entities);
 
     // Operand kind shorthands.
-    let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
-    let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();
+    let iflags: &TypeVar = &ValueType::Special(SpecialType::IFlags).into();
+    let fflags: &TypeVar = &ValueType::Special(SpecialType::FFlags).into();
 
     let b1: &TypeVar = &ValueType::from(LaneType::from(types::Bool::B1)).into();
     let f32_: &TypeVar = &ValueType::from(LaneType::from(types::Float::F32)).into();

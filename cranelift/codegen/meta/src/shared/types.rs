@@ -35,22 +35,3 @@ pub(crate) enum Float {
     F32 = 32,
     F64 = 64,
 }
-
-/// A type representing CPU flags.
-///
-/// Flags can't be stored in memory.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(crate) enum Flag {
-    /// CPU flags from an integer comparison.
-    IFlags,
-    /// CPU flags from a floating point comparison.
-    FFlags,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(crate) enum Reference {
-    /// 32-bit reference.
-    R32 = 32,
-    /// 64-bit reference.
-    R64 = 64,
-}

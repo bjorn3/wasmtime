@@ -60,7 +60,7 @@ impl TypeVar {
             ValueType::Special(special_type) => {
                 return TypeVar::new(name, doc, builder.specials(vec![special_type]).build());
             }
-            ValueType::Reference(ReferenceType(reference_type)) => {
+            ValueType::Reference(reference_type) => {
                 let bits = reference_type as RangeBound;
                 return TypeVar::new(name, doc, builder.refs(bits..bits).build());
             }
