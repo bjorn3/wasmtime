@@ -526,6 +526,51 @@ impl Inst {
         }
     }
 
+    pub(crate) fn invoke_known(
+        dest: ExternalName,
+        uses: SmallVec<[Reg; 8]>,
+        defs: SmallVec<[Writable<Reg>; 8]>,
+        clobbers: PRegSet,
+        opcode: Opcode,
+        default: MachLabel,
+        alternatives: Box<SmallVec<[MachLabel; 4]>>,
+    ) -> Inst {
+        Inst::InvokeKnown {
+            dest,
+            info: Box::new(CallInfo {
+                uses,
+                defs,
+                clobbers,
+                opcode,
+            }),
+            default,
+            alternatives,
+        }
+    }
+
+    pub(crate) fn invoke_unknown(
+        dest: RegMem,
+        uses: SmallVec<[Reg; 8]>,
+        defs: SmallVec<[Writable<Reg>; 8]>,
+        clobbers: PRegSet,
+        opcode: Opcode,
+        default: MachLabel,
+        alternatives: Vec<MachLabel>,
+    ) -> Inst {
+        dest.assert_regclass_is(RegClass::Int);
+        Inst::InvokeUnknown {
+            dest,
+            info: Box::new(CallInfo {
+                uses,
+                defs,
+                clobbers,
+                opcode,
+            }),
+            default,
+            alternatives,
+        }
+    }
+
     pub(crate) fn ret(rets: Vec<Reg>) -> Inst {
         Inst::Ret { rets }
     }

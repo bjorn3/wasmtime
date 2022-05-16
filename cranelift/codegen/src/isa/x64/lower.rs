@@ -580,7 +580,9 @@ fn lower_insn_to_regs(
         | Opcode::BrIcmp
         | Opcode::Brif
         | Opcode::Brff
-        | Opcode::BrTable => {
+        | Opcode::BrTable
+        | Opcode::Invoke
+        | Opcode::InvokeIndirect => {
             panic!("Branch opcode reached non-branch lowering logic!");
         }
     }
@@ -623,6 +625,77 @@ impl LowerBackend for X64Backend {
             targets,
         ) {
             return Ok(());
+        }
+
+        assert_eq!(branches.len(), 1);
+
+        // Must be an unconditional branch or trap.
+        let op = ctx.data(branches[0]).opcode();
+        match op {
+            Opcode::Invoke | Opcode::InvokeIndirect => {
+                let inputs: SmallVec<[InsnInput; 4]> = (0..ctx.num_inputs(branches[0]))
+                    .map(|i| InsnInput {
+                        insn: branches[0],
+                        input: i,
+                    })
+                    .collect();
+                let outputs: SmallVec<[InsnOutput; 2]> = (0..ctx.num_outputs(branches[0]))
+                    .map(|i| InsnOutput {
+                        insn: branches[0],
+                        output: i,
+                    })
+                    .collect();
+
+                let default_target = targets[0];
+                let alternatives: Box<SmallVec<[MachLabel; 4]>> = targets.iter().skip(1).cloned().collect();
+
+                let caller_conv = ctx.abi().call_conv(ctx.sigs());
+                let (mut abi, inputs) = match op {
+                    Opcode::Invoke => {
+                        let (extname, dist) = ctx.call_target(branches[0]).unwrap();
+                        let sig = ctx.call_sig(branches[0]).unwrap();
+                        assert_eq!(inputs.len(), sig.params.len());
+                        assert_eq!(outputs.len(), sig.returns.len());
+                        (
+                            X64Caller::from_func(ctx.sigs(), sig, &extname, dist, caller_conv, self.flags)?,
+                            &inputs[..],
+                        )
+                    }
+
+                    Opcode::InvokeIndirect => {
+                        let ptr = put_input_in_reg(ctx, inputs[0]);
+                        let sig = ctx.call_sig(branches[0]).unwrap();
+                        assert_eq!(inputs.len() - 1, sig.params.len());
+                        assert_eq!(outputs.len(), sig.returns.len());
+                        (
+                            X64Caller::from_ptr(ctx.sigs(), sig, ptr, op, caller_conv, self.flags)?,
+                            &inputs[1..],
+                        )
+                    }
+
+                    _ => unreachable!(),
+                };
+
+                abi.emit_stack_pre_adjust(ctx);
+                assert_eq!(inputs.len(), abi.num_args(ctx.sigs()));
+                for i in abi.get_copy_to_arg_order() {
+                    let input = inputs[i];
+                    let arg_regs = put_input_in_regs(ctx, input);
+                    abi.emit_copy_regs_to_arg(ctx, i, arg_regs);
+                }
+                abi.emit_invoke(
+                    ctx,
+                    default_target, /* TODO should be temp block */
+                    alternatives,
+                );
+                for (i, output) in outputs.iter().enumerate() {
+                    let retval_regs = get_output_reg(ctx, *output);
+                    abi.emit_copy_retval_to_regs(ctx, i, retval_regs);
+                }
+                abi.emit_stack_post_adjust(ctx);
+            }
+
+            _ => panic!("Unknown branch type {:?}", op),
         }
 
         unreachable!(

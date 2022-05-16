@@ -567,6 +567,63 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
+    /// Generate a call instruction/sequence.
+    fn gen_invoke(
+        dest: &CallDest,
+        uses: SmallVec<[Reg; 8]>,
+        defs: SmallVec<[Writable<Reg>; 8]>,
+        clobbers: PRegSet,
+        opcode: ir::Opcode,
+        tmp: Writable<Reg>,
+        _callee_conv: isa::CallConv,
+        _caller_conv: isa::CallConv,
+        default: MachLabel,
+        alternatives: Vec<MachLabel>,
+    ) -> SmallVec<[Self::I; 2]> {
+        let mut insts = SmallVec::new();
+        match dest {
+            &CallDest::ExtName(ref name, RelocDistance::Near) => {
+                insts.push(Inst::invoke_known(
+                    name.clone(),
+                    uses,
+                    defs,
+                    clobbers,
+                    opcode,
+                    default,
+                    alternatives,
+                ));
+            }
+            &CallDest::ExtName(ref name, RelocDistance::Far) => {
+                insts.push(Inst::LoadExtName {
+                    dst: tmp,
+                    name: Box::new(name.clone()),
+                    offset: 0,
+                });
+                insts.push(Inst::invoke_unknown(
+                    RegMem::reg(tmp.to_reg()),
+                    uses,
+                    defs,
+                    clobbers,
+                    opcode,
+                    default,
+                    alternatives,
+                ));
+            }
+            &CallDest::Reg(reg) => {
+                insts.push(Inst::invoke_unknown(
+                    RegMem::reg(reg),
+                    uses,
+                    defs,
+                    clobbers,
+                    opcode,
+                    default,
+                    alternatives,
+                ));
+            }
+        }
+        insts
+    }
+
     fn gen_memcpy(
         call_conv: isa::CallConv,
         dst: Reg,

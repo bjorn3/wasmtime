@@ -491,6 +491,21 @@ pub trait ABIMachineSpec {
         callee_conv: isa::CallConv,
     ) -> SmallVec<[Self::I; 2]>;
 
+    /// Generate an invoke instruction/sequence. This method is provided one
+    /// temporary register to use to synthesize the called address, if needed.
+    fn gen_invoke(
+        dest: &CallDest,
+        uses: SmallVec<[Reg; 8]>,
+        defs: SmallVec<[Writable<Reg>; 8]>,
+        clobbers: PRegSet,
+        opcode: ir::Opcode,
+        tmp: Writable<Reg>,
+        callee_conv: isa::CallConv,
+        callee_conv: isa::CallConv,
+        dest: MachLabel,
+        alternatives: Vec<MachLabel>,
+    ) -> SmallVec<[Self::I; 2]>;
+
     /// Generate a memcpy invocation. Used to set up struct args. May clobber
     /// caller-save registers; we only memcpy before we start to set up args for
     /// a call.
@@ -2132,6 +2147,46 @@ impl<M: ABIMachineSpec> Caller<M> {
             tmp,
             ctx.sigs()[self.sig].call_conv,
             self.caller_conv,
+        )
+        .into_iter()
+        {
+            ctx.emit(inst);
+        }
+    }
+
+    fn emit_invoke(
+        &mut self,
+        ctx: &mut Lower<M::I>,
+        dest: MachLabel,
+        alternatives: Vec<MachLabel>,
+    ) {
+        let (uses, defs) = (
+            mem::replace(&mut self.uses, Default::default()),
+            mem::replace(&mut self.defs, Default::default()),
+        );
+        let word_type = M::word_type();
+        if let Some(i) = self.sig.stack_ret_arg {
+            let rd = ctx.alloc_tmp(word_type).only_reg().unwrap();
+            let ret_area_base = self.sig.stack_arg_space;
+            ctx.emit(M::gen_get_stack_addr(
+                StackAMode::SPOffset(ret_area_base, I8),
+                rd,
+                I8,
+            ));
+            self.emit_copy_regs_to_arg(ctx, i, ValueRegs::one(rd.to_reg()));
+        }
+        let tmp = ctx.alloc_tmp(word_type).only_reg().unwrap();
+        for inst in M::gen_invoke(
+            &self.dest,
+            uses,
+            defs,
+            self.clobbers,
+            self.opcode,
+            tmp,
+            self.sig.call_conv,
+            self.caller_conv,
+            dest,
+            alternatives,
         )
         .into_iter()
         {
