@@ -235,4 +235,11 @@ pub trait ABICaller {
     /// This function should only be called once, as it is allowed to re-use
     /// parts of the ABICaller object in emitting instructions.
     fn emit_call<C: LowerCtx<I = Self::I>>(&mut self, ctx: &mut C);
+
+    fn emit_invoke<C: LowerCtx<I = Self::I>>(
+        &mut self,
+        ctx: &mut C,
+        dest: MachLabel,
+        alternatives: Vec<MachLabel>,
+    );
 }

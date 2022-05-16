@@ -3050,7 +3050,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::BrIcmp
         | Opcode::Brif
         | Opcode::Brff
-        | Opcode::BrTable => {
+        | Opcode::BrTable
+        | Opcode::Invoke
+        | Opcode::InvokeIndirect => {
             panic!("Branch opcode reached non-branch lowering logic!");
         }
 
@@ -3373,7 +3375,6 @@ impl LowerBackend for X64Backend {
                     };
                     ctx.emit(Inst::cmp_rmi_r(cmp_size, RegMemImm::imm(jt_size), idx));
 
-                    let targets_for_term: Vec<MachLabel> = targets.to_vec();
                     let default_target = targets[0];
 
                     let jt_targets: Vec<MachLabel> = targets.iter().skip(1).cloned().collect();
@@ -3384,8 +3385,66 @@ impl LowerBackend for X64Backend {
                         tmp2,
                         default_target,
                         targets: jt_targets,
-                        targets_for_term,
                     });
+                }
+
+                Opcode::Invoke | Opcode::InvokeIndirect => {
+                    let inputs: SmallVec<[InsnInput; 4]> = (0..ctx.num_inputs(branches[0]))
+                        .map(|i| InsnInput { insn: branches[0], input: i })
+                        .collect();
+                    let outputs: SmallVec<[InsnOutput; 2]> = (0..ctx.num_outputs(branches[0]))
+                        .map(|i| InsnOutput { insn: branches[0], output: i })
+                        .collect();
+
+                    let default_target = targets[0];
+                    let alternatives: Vec<MachLabel> = targets.iter().skip(1).cloned().collect();
+
+                    let caller_conv = ctx.abi().call_conv();
+                    let (mut abi, inputs) = match op {
+                        Opcode::Invoke => {
+                            let (extname, dist) = ctx.call_target(branches[0]).unwrap();
+                            let sig = ctx.call_sig(branches[0]).unwrap();
+                            assert_eq!(inputs.len(), sig.params.len());
+                            assert_eq!(outputs.len(), sig.returns.len());
+                            (
+                                X64ABICaller::from_func(
+                                    sig,
+                                    &extname,
+                                    dist,
+                                    caller_conv,
+                                    &self.flags,
+                                )?,
+                                &inputs[..],
+                            )
+                        }
+
+                        Opcode::InvokeIndirect => {
+                            let ptr = put_input_in_reg(ctx, inputs[0]);
+                            let sig = ctx.call_sig(branches[0]).unwrap();
+                            assert_eq!(inputs.len() - 1, sig.params.len());
+                            assert_eq!(outputs.len(), sig.returns.len());
+                            (
+                                X64ABICaller::from_ptr(sig, ptr, op, caller_conv, &self.flags)?,
+                                &inputs[1..],
+                            )
+                        }
+
+                        _ => unreachable!(),
+                    };
+
+                    abi.emit_stack_pre_adjust(ctx);
+                    assert_eq!(inputs.len(), abi.num_args());
+                    for i in abi.get_copy_to_arg_order() {
+                        let input = inputs[i];
+                        let arg_regs = put_input_in_regs(ctx, input);
+                        abi.emit_copy_regs_to_arg(ctx, i, arg_regs);
+                    }
+                    abi.emit_invoke(ctx, default_target/* TODO should be temp block */, alternatives);
+                    for (i, output) in outputs.iter().enumerate() {
+                        let retval_regs = get_output_reg(ctx, *output);
+                        abi.emit_copy_retval_to_regs(ctx, i, retval_regs);
+                    }
+                    abi.emit_stack_post_adjust(ctx);
                 }
 
                 _ => panic!("Unknown branch type {:?}", op),
