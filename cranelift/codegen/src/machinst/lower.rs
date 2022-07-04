@@ -15,6 +15,7 @@ use crate::ir::{
     GlobalValue, GlobalValueData, Inst, InstructionData, MemFlags, Opcode, Signature, SourceLoc,
     Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
+use crate::isa::BlockConv;
 use crate::machinst::{
     non_writable_value_regs, writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder,
     LoweredBlock, MachLabel, Reg, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
@@ -91,6 +92,8 @@ pub trait LowerCtx {
     fn call_target<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance)>;
     /// Get the signature for a call or call-indirect instruction.
     fn call_sig<'b>(&'b self, ir_inst: Inst) -> Option<&'b Signature>;
+    /// Get the block signatures for all alternative branches of an invoke instruction.
+    fn invoke_alternative_block_sigs(&self, ir_inst: Inst) -> SmallVec<[(BlockConv, Vec<Type>); 1]>;
     /// Get the symbol name, relocation distance estimate, and offset for a
     /// symbol_value instruction.
     fn symbol_value<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance, i64)>;
@@ -1204,6 +1207,18 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
             &InstructionData::CallIndirect { sig_ref, .. } => Some(&self.f.dfg.signatures[sig_ref]),
             _ => None,
         }
+    }
+
+    fn invoke_alternative_block_sigs(&self, ir_inst: Inst) -> SmallVec<[(BlockConv, Vec<Type>); 1]> {
+        let alternative_blocks = match self.f.dfg[ir_inst] {
+            InstructionData::Invoke { table, .. } | InstructionData::InvokeIndirect { table, ..} => {
+                &self.f.jump_tables[table].as_slice()[1..]
+            }
+            _ => unreachable!(),
+        };
+        alternative_blocks.iter().map(|&block| {
+            (self.f.dfg.block_conv(block), self.f.dfg.block_param_types(block))
+        }).collect()
     }
 
     fn symbol_value<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance, i64)> {

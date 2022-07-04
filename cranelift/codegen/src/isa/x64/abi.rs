@@ -2,7 +2,7 @@
 
 use crate::ir::types::*;
 use crate::ir::{self, types, ExternalName, LibCall, MemFlags, Opcode, TrapCode, Type};
-use crate::isa;
+use crate::isa::{self, BlockConv};
 use crate::isa::{unwind::UnwindInst, x64::inst::*, CallConv};
 use crate::machinst::abi_impl::*;
 use crate::machinst::*;
@@ -304,6 +304,16 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
 
         Ok((ret, next_stack as i64, extra_arg))
+    }
+
+    fn compute_alternative_return_defs(
+        call_conv: isa::CallConv,
+        flags: &settings::Flags,
+        alternative_block_sigs: &[(BlockConv, Vec<Type>)],
+    ) -> Vec<ABIArg> {
+        assert_eq!(call_conv, isa::CallConv::SystemV);
+
+        todo!()
     }
 
     fn fp_to_arg_offset(call_conv: isa::CallConv, flags: &settings::Flags) -> i64 {

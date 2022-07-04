@@ -51,6 +51,8 @@ pub enum CallConv {
 pub enum BlockConv {
     /// Nothing special.
     Default,
+    /// The regular return destination of a call.
+    SystemVCallRet,
     /// A landing pad for DWARF based unwinding. Can't be directly jumped to, but is only allowed as
     /// abnormal return destination for `invoke` and `invoke_indirect` calls to SystemV functions.
     /// Allows up to four block arguments to be passed by the personality function.

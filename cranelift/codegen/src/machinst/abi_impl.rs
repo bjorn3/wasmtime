@@ -127,6 +127,7 @@ use super::abi::*;
 use crate::binemit::StackMap;
 use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, StackSlot};
+use crate::isa::BlockConv;
 use crate::machinst::*;
 use crate::settings;
 use crate::CodegenResult;
@@ -328,6 +329,12 @@ pub trait ABIMachineSpec {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
     ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)>;
+
+    fn compute_alternative_return_defs(
+        call_conv: isa::CallConv,
+        flags: &settings::Flags,
+        alternative_block_sigs: &[(BlockConv, Vec<Type>)],
+    ) -> Vec<ABIArg>;
 
     /// Returns the offset from FP to the argument area, i.e., jumping over the saved FP, return
     /// address, and maybe other standard elements depending on ABI (e.g. Wasm TLS reg).
@@ -622,6 +629,8 @@ impl ABISig {
     /// and caller-saved registers), and clobbers for the callsite.
     pub fn call_uses_defs_clobbers<M: ABIMachineSpec>(
         &self,
+        flags: &Flags,
+        alternative_block_sigs: &[(BlockConv, Vec<Type>)],
     ) -> (SmallVec<[Reg; 8]>, SmallVec<[Writable<Reg>; 8]>, PRegSet) {
         // Compute uses: all arg regs.
         let mut uses = smallvec![];
@@ -657,6 +666,26 @@ impl ABISig {
                 }
             }
         }
+
+        /*
+        let mut alternative_return_defs =
+            M::compute_alternative_return_defs(self.call_conv, flags, alternative_block_sigs);
+        for def in alternative_return_defs {
+            if let &ABIArg::Slots { ref slots, .. } = def {
+                for slot in slots {
+                    match slot {
+                        &ABIArgSlot::Reg { reg, .. } => {
+                            if !defs.contains(&Writable::from_reg(Reg::from(reg))) {
+                                defs.push(Writable::from_reg(Reg::from(reg)));
+                                clobbers.remove(PReg::from(reg));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        */
 
         (uses, defs, clobbers)
     }
@@ -1493,9 +1522,9 @@ pub struct ABICallerImpl<M: ABIMachineSpec> {
     /// All uses for the callsite, i.e., function args.
     uses: SmallVec<[Reg; 8]>,
     /// All defs for the callsite, i.e., return values.
-    defs: SmallVec<[Writable<Reg>; 8]>,
+    pub(crate) defs: SmallVec<[Writable<Reg>; 8]>,
     /// Caller-save clobbers.
-    clobbers: PRegSet,
+    pub(crate) clobbers: PRegSet,
     /// Call destination.
     dest: CallDest,
     /// Actual call opcode; used to distinguish various types of calls.
@@ -1521,6 +1550,7 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
     /// Create a callsite ABI object for a call directly to the specified function.
     pub fn from_func(
         sig: &ir::Signature,
+        alternative_block_sigs: &[(BlockConv, Vec<Type>)],
         extname: &ir::ExternalName,
         dist: RelocDistance,
         caller_conv: isa::CallConv,
@@ -1528,7 +1558,8 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
     ) -> CodegenResult<ABICallerImpl<M>> {
         let ir_sig = ensure_struct_return_ptr_is_returned(sig);
         let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
-        let (uses, defs, clobbers) = sig.call_uses_defs_clobbers::<M>();
+        let (uses, defs, clobbers) =
+            sig.call_uses_defs_clobbers::<M>(flags, alternative_block_sigs);
         Ok(ABICallerImpl {
             ir_sig,
             sig,
@@ -1547,6 +1578,7 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
     /// given signature.
     pub fn from_ptr(
         sig: &ir::Signature,
+        alternative_block_sigs: &[(BlockConv, Vec<Type>)],
         ptr: Reg,
         opcode: ir::Opcode,
         caller_conv: isa::CallConv,
@@ -1554,7 +1586,8 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
     ) -> CodegenResult<ABICallerImpl<M>> {
         let ir_sig = ensure_struct_return_ptr_is_returned(sig);
         let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
-        let (uses, defs, clobbers) = sig.call_uses_defs_clobbers::<M>();
+        let (uses, defs, clobbers) =
+            sig.call_uses_defs_clobbers::<M>(flags, alternative_block_sigs);
         Ok(ABICallerImpl {
             ir_sig,
             sig,
@@ -1790,6 +1823,8 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         dest: MachLabel,
         alternatives: Vec<MachLabel>,
     ) {
+        // FIXME: Mark all landingpad arguments as defs for the invoke instruction
+
         let (uses, defs) = (
             mem::replace(&mut self.uses, Default::default()),
             mem::replace(&mut self.defs, Default::default()),

@@ -2796,6 +2796,9 @@ impl<'a> Parser<'a> {
                     args: args.into_value_list(&[callee], &mut ctx.function.dfg.value_lists),
                 }
             }
+            InstructionFormat::Invoke | InstructionFormat::InvokeIndirect => {
+                todo!()
+            }
             InstructionFormat::FuncAddr => {
                 let func_ref = self.match_fn("expected function reference")?;
                 ctx.check_fn(func_ref, self.loc)?;
