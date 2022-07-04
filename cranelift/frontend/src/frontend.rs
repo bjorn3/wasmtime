@@ -11,7 +11,7 @@ use cranelift_codegen::ir::{
     InstructionData, JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot,
     StackSlotData, Type, Value, ValueLabel, ValueLabelAssignments, ValueLabelStart,
 };
-use cranelift_codegen::isa::TargetFrontendConfig;
+use cranelift_codegen::isa::{TargetFrontendConfig, BlockConv};
 use cranelift_codegen::packed_option::PackedOption;
 use std::convert::TryInto; // FIXME: Remove in edition2021
 
@@ -220,6 +220,18 @@ impl<'a> FunctionBuilder<'a> {
     /// Creates a new `Block` and returns its reference.
     pub fn create_block(&mut self) -> Block {
         let block = self.func.dfg.make_block();
+        self.func_ctx.ssa.declare_block(block);
+        self.func_ctx.blocks[block] = BlockData {
+            filled: false,
+            pristine: true,
+            user_param_count: 0,
+        };
+        block
+    }
+
+    /// Creates a new `Block` with a given `BlockConv` and returns its reference.
+    pub fn create_block_with_block_conv(&mut self, block_conv: BlockConv) -> Block {
+        let block = self.func.dfg.make_block_with_block_conv(block_conv);
         self.func_ctx.ssa.declare_block(block);
         self.func_ctx.blocks[block] = BlockData {
             filled: false,
