@@ -1,12 +1,8 @@
 //! Generate the ISA-specific settings.
-use std::collections::HashMap;
-
-use crate::constant_hash::generate_table;
-use cranelift_codegen_shared::constant_hash::simple_hash;
 
 use crate::cdsl::camel_case;
 use crate::cdsl::settings::{
-    BoolSetting, Predicate, Preset, Setting, SettingGroup, SpecificSetting,
+    BoolSetting, Predicate,  Setting, SettingGroup, SpecificSetting,
 };
 use crate::error;
 use crate::srcgen::{Formatter, Match};
@@ -276,26 +272,9 @@ fn gen_getters(group: &SettingGroup, fmt: &mut Formatter) {
     fmtln!(fmt, "}");
 }
 
-#[derive(Hash, PartialEq, Eq)]
-enum SettingOrPreset<'a> {
-    Setting(&'a Setting),
-    Preset(&'a Preset),
-}
-
-impl<'a> SettingOrPreset<'a> {
-    fn name(&self) -> &str {
-        match *self {
-            SettingOrPreset::Setting(s) => s.name,
-            SettingOrPreset::Preset(p) => p.name,
-        }
-    }
-}
-
-/// Emits DESCRIPTORS, ENUMERATORS, HASH_TABLE and PRESETS.
+/// Emits DESCRIPTORS, ENUMERATORS and PRESETS.
 fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
     let mut enum_table = UniqueSeqTable::new();
-
-    let mut descriptor_index_map: HashMap<SettingOrPreset, usize> = HashMap::new();
 
     // Generate descriptors.
     fmtln!(
@@ -304,7 +283,7 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
         group.settings.len() + group.presets.len()
     );
     fmt.indent(|fmt| {
-        for (idx, setting) in group.settings.iter().enumerate() {
+        for  setting in group.settings.iter() {
             fmtln!(fmt, "detail::Descriptor {");
             fmt.indent(|fmt| {
                 fmtln!(fmt, "name: \"{}\",", setting.name);
@@ -331,8 +310,6 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
                         fmtln!(fmt, "detail: detail::Detail::Num,");
                     }
                 }
-
-                descriptor_index_map.insert(SettingOrPreset::Setting(setting), idx);
             });
             fmtln!(fmt, "},");
         }
@@ -346,9 +323,6 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
                 fmtln!(fmt, "detail: detail::Detail::Preset,");
             });
             fmtln!(fmt, "},");
-
-            let whole_idx = idx + group.settings.len();
-            descriptor_index_map.insert(SettingOrPreset::Preset(preset), whole_idx);
         }
     });
     fmtln!(fmt, "];");
@@ -358,32 +332,6 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
     fmt.indent(|fmt| {
         for enum_val in enum_table.iter() {
             fmtln!(fmt, "\"{}\",", enum_val);
-        }
-    });
-    fmtln!(fmt, "];");
-
-    // Generate hash table.
-    let mut hash_entries: Vec<SettingOrPreset> = Vec::new();
-    hash_entries.extend(group.settings.iter().map(|x| SettingOrPreset::Setting(x)));
-    hash_entries.extend(group.presets.iter().map(|x| SettingOrPreset::Preset(x)));
-
-    let hash_table = generate_table(hash_entries.iter(), hash_entries.len(), |entry| {
-        simple_hash(entry.name())
-    });
-    fmtln!(fmt, "static HASH_TABLE: [u16; {}] = [", hash_table.len());
-    fmt.indent(|fmt| {
-        for h in &hash_table {
-            match *h {
-                Some(setting_or_preset) => fmtln!(
-                    fmt,
-                    "{},",
-                    &descriptor_index_map
-                        .get(setting_or_preset)
-                        .unwrap()
-                        .to_string()
-                ),
-                None => fmtln!(fmt, "0xffff,"),
-            }
         }
     });
     fmtln!(fmt, "];");
@@ -429,7 +377,6 @@ fn gen_template(group: &SettingGroup, fmt: &mut Formatter) {
         fmtln!(fmt, "name: \"{}\",", group.name);
         fmtln!(fmt, "descriptors: &DESCRIPTORS,");
         fmtln!(fmt, "enumerators: &ENUMERATORS,");
-        fmtln!(fmt, "hash_table: &HASH_TABLE,");
         fmtln!(fmt, "defaults: &[{}],", default_bytes_str);
         fmtln!(fmt, "presets: &PRESETS,");
     });

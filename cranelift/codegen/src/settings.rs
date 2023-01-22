@@ -20,7 +20,6 @@
 //! assert_eq!(f.opt_level(), settings::OptLevel::SpeedAndSize);
 //! ```
 
-use crate::constant_hash::{probe, simple_hash};
 use crate::isa::TargetIsa;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
@@ -210,13 +209,12 @@ impl Builder {
 
     /// Look up a descriptor by name.
     fn lookup(&self, name: &str) -> SetResult<(usize, detail::Detail)> {
-        match probe(self.template, name, simple_hash(name)) {
-            Err(_) => Err(SetError::BadName(name.to_string())),
-            Ok(entry) => {
-                let d = &self.template.descriptors[self.template.hash_table[entry] as usize];
-                Ok((d.offset as usize, d.detail))
+        for descriptor in self.template.descriptors {
+            if descriptor.name == name {
+                return Ok((descriptor.offset as usize, descriptor.detail));
             }
         }
+        Err(SetError::BadName(name.to_string()))
     }
 }
 
@@ -347,7 +345,6 @@ impl<'a> PredicateView<'a> {
 /// This module holds definitions that need to be public so the can be instantiated by generated
 /// code in other modules.
 pub mod detail {
-    use crate::constant_hash;
     use core::fmt;
     use core::hash::Hash;
 
@@ -360,8 +357,6 @@ pub mod detail {
         pub descriptors: &'static [Descriptor],
         /// Union of all enumerators.
         pub enumerators: &'static [&'static str],
-        /// Hash table of settings.
-        pub hash_table: &'static [u16],
         /// Default values.
         pub defaults: &'static [u8],
         /// Pairs of (mask, value) for presets.
@@ -397,22 +392,6 @@ pub mod detail {
                 }
                 // Presets aren't printed. They are reflected in the other settings.
                 Detail::Preset { .. } => Ok(()),
-            }
-        }
-    }
-
-    /// The template contains a hash table for by-name lookup.
-    impl<'a> constant_hash::Table<&'a str> for Template {
-        fn len(&self) -> usize {
-            self.hash_table.len()
-        }
-
-        fn key(&self, idx: usize) -> Option<&'a str> {
-            let e = self.hash_table[idx] as usize;
-            if e < self.descriptors.len() {
-                Some(self.descriptors[e].name)
-            } else {
-                None
             }
         }
     }
