@@ -19,7 +19,6 @@
     )
 )]
 
-pub mod constant_hash;
 pub mod constants;
 
 /// Version number of this crate.
