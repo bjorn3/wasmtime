@@ -3,7 +3,32 @@
 use std::fmt;
 
 use crate::shared::types as shared_types;
-use cranelift_codegen_shared::constants;
+
+// Numbering scheme for value types:
+//
+// 0: Void
+// 0x01-0x6f: Special types
+// 0x70-0x7d: Lane types
+// 0x7e-0x7f: Reference types
+// 0x80-0xff: Vector types
+// 0x100-0x17f: Dynamic Vector types
+//
+// Vector types are encoded with the lane type in the low 4 bits and log2(lanes)
+// in the next highest 4 bits, giving a range of 2-256 lanes.
+
+// Dynamic vector types are encoded similarily.
+
+/// Start of the lane types.
+pub const LANE_BASE: u16 = 0x70;
+
+/// Base for reference types.
+pub const REFERENCE_BASE: u16 = 0x7E;
+
+/// Start of the 2-lane vector types.
+pub const VECTOR_BASE: u16 = 0x80;
+
+/// Start of the dynamic vector types.
+pub const DYNAMIC_VECTOR_BASE: u16 = 0x100;
 
 // Rust name prefix used for the `rust_name` method.
 static RUST_NAME_PREFIX: &str = "ir::types::";
@@ -166,7 +191,7 @@ impl LaneType {
 
     /// Find the unique number associated with this lane type.
     pub fn number(self) -> u16 {
-        constants::LANE_BASE
+        LANE_BASE
             + match self {
                 LaneType::Int(shared_types::Int::I8) => 6,
                 LaneType::Int(shared_types::Int::I16) => 7,
@@ -439,7 +464,7 @@ impl ReferenceType {
 
     /// Find the unique number associated with this reference type.
     pub fn number(self) -> u16 {
-        constants::REFERENCE_BASE
+        REFERENCE_BASE
             + match self {
                 ReferenceType(shared_types::Reference::R32) => 0,
                 ReferenceType(shared_types::Reference::R64) => 1,

@@ -7,7 +7,9 @@
 //! This ensures that the metaprogram and the generated program see the same
 //! type numbering.
 
-use crate::cdsl::types as cdsl_types;
+use crate::cdsl::types::{
+    self as cdsl_types, DYNAMIC_VECTOR_BASE, LANE_BASE, REFERENCE_BASE, VECTOR_BASE,
+};
 use crate::error;
 use crate::srcgen;
 
@@ -70,6 +72,17 @@ fn emit_types(fmt: &mut srcgen::Formatter) {
 pub(crate) fn generate(filename: &str, out_dir: &str) -> Result<(), error::Error> {
     let mut fmt = srcgen::Formatter::new();
     emit_types(&mut fmt);
+    fmt.line("mod constants {");
+    fmt.indent(|fmt| {
+        fmt.line(format!("pub const LANE_BASE: u16 = {LANE_BASE};"));
+        fmt.line("#[allow(dead_code)]");
+        fmt.line(format!("pub const REFERENCE_BASE: u16 = {REFERENCE_BASE};"));
+        fmt.line(format!("pub const VECTOR_BASE: u16 = {VECTOR_BASE};"));
+        fmt.line(format!(
+            "pub const DYNAMIC_VECTOR_BASE: u16 = {DYNAMIC_VECTOR_BASE};"
+        ));
+    });
+    fmt.line("}");
     fmt.update_file(filename, out_dir)?;
     Ok(())
 }
