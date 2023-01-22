@@ -553,7 +553,6 @@ dependencies = [
  "bumpalo",
  "cranelift-bforest",
  "cranelift-codegen-meta",
- "cranelift-codegen-shared",
  "cranelift-entity",
  "cranelift-isle",
  "criterion",
@@ -570,13 +569,6 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-meta"
-version = "0.92.0"
-dependencies = [
- "cranelift-codegen-shared",
-]
-
-[[package]]
-name = "cranelift-codegen-shared"
 version = "0.92.0"
 
 [[package]]

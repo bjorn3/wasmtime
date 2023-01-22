@@ -21,8 +21,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-isle",
     "cranelift-entity",
     "wasmtime-types",
-    "cranelift-bforest",
-    "cranelift-codegen-shared",
+    "cranelift-bforest"
     "cranelift-codegen-meta",
     "cranelift-egraph",
     "cranelift-codegen",
@@ -92,7 +91,6 @@ const PUBLIC_CRATES: &[&str] = &[
     // have breaking API changes in patch releases
     "cranelift-entity",
     "cranelift-bforest",
-    "cranelift-codegen-shared",
     "cranelift-codegen-meta",
     "cranelift-egraph",
     "cranelift-codegen",
