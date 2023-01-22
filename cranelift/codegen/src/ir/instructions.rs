@@ -38,7 +38,7 @@ pub type ValueListPool = entity::ListPool<Value>;
 // - The `pub enum Opcode` definition with all known opcodes,
 // - The `const OPCODE_FORMAT: [InstructionFormat; N]` table.
 // - The private `fn opcode_name(Opcode) -> &'static str` function, and
-// - The hash table `const OPCODE_HASH_TABLE: [Opcode; N]`.
+// - The private `fn opcode_from_name(&'static str) -> Result<Opcode, &'static str>> function.
 //
 // For value type constraints:
 //
@@ -84,24 +84,7 @@ impl FromStr for Opcode {
 
     /// Parse an Opcode name from a string.
     fn from_str(s: &str) -> Result<Self, &'static str> {
-        use crate::constant_hash::{probe, simple_hash, Table};
-
-        impl<'a> Table<&'a str> for [Option<Opcode>] {
-            fn len(&self) -> usize {
-                self.len()
-            }
-
-            fn key(&self, idx: usize) -> Option<&'a str> {
-                self[idx].map(opcode_name)
-            }
-        }
-
-        match probe::<&str, [Option<Self>]>(&OPCODE_HASH_TABLE, s, simple_hash(s)) {
-            Err(_) => Err("Unknown opcode"),
-            // We unwrap here because probe() should have ensured that the entry
-            // at this index is not None.
-            Ok(i) => Ok(OPCODE_HASH_TABLE[i].unwrap()),
-        }
+        opcode_from_name(s)
     }
 }
 

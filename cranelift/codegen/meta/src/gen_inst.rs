@@ -1,8 +1,6 @@
 //! Generate instruction data (including opcodes, formats, builders, etc.).
 use std::fmt;
 
-use cranelift_codegen_shared::constant_hash;
-
 use crate::cdsl::camel_case;
 use crate::cdsl::formats::InstructionFormat;
 use crate::cdsl::instructions::{AllInstructions, Instruction};
@@ -557,25 +555,20 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
     fmt.line("}");
     fmt.empty_line();
 
-    // Generate an opcode hash table for looking up opcodes by name.
-    let hash_table =
-        crate::constant_hash::generate_table(all_inst.iter(), all_inst.len(), |inst| {
-            constant_hash::simple_hash(&inst.name)
-        });
-    fmtln!(
-        fmt,
-        "const OPCODE_HASH_TABLE: [Option<Opcode>; {}] = [",
-        hash_table.len()
-    );
+    // Generate a private opcode_from_name function.
+    fmt.line("fn opcode_from_name(name: &str) -> Result<Opcode, &\'static str> {");
     fmt.indent(|fmt| {
-        for i in hash_table {
-            match i {
-                Some(i) => fmtln!(fmt, "Some(Opcode::{}),", i.camel_name),
-                None => fmtln!(fmt, "None,"),
-            }
+        let mut m = Match::new("name");
+        for inst in all_inst.iter() {
+            m.arm_no_fields(
+                format!("\"{}\"", inst.name),
+                format!("Ok(Opcode::{})", inst.camel_name),
+            );
         }
+        m.arm_no_fields("_", "Err(\"Unknown opcode\")");
+        fmt.add_match(m);
     });
-    fmtln!(fmt, "];");
+    fmt.line("}");
     fmt.empty_line();
 }
 
