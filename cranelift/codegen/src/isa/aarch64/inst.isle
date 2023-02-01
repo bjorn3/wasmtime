@@ -306,12 +306,21 @@
          (ty Type)
          (flags MemFlags))
 
-       ;; Read `access_ty` bits from address `rt`, either 8, 16, 32 or 64-bits, and put
-       ;; it in `rn`, optionally zero-extending to fill a word or double word result.
+       ;; Read `access_ty` bits from address `rn`, either 8, 16, 32 or 64-bits, and put
+       ;; it in `rt`, optionally zero-extending to fill a word or double word result.
        ;; This instruction is sequentially consistent.
        (LoadAcquire
         (access_ty Type) ;; I8, I16, I32 or I64
         (rt WritableReg)
+        (rn Reg)
+        (flags MemFlags))
+
+       ;; Read 128 bits from address `rn`, put it in `rt1` and `rt2` and mark the memory location as
+       ;; exclusive access.
+       ;; This instruction is sequentially consistent.
+       (LoadAcquireExclusivePair
+        (rt1 WritableReg)
+        (rt2 WritableReg)
         (rn Reg)
         (flags MemFlags))
 
@@ -320,6 +329,16 @@
        (StoreRelease
         (access_ty Type) ;; I8, I16, I32 or I64
         (rt Reg)
+        (rn Reg)
+        (flags MemFlags))
+
+       ;; Write the 128 bit register pair `rt1`, `rt2` to address `rn` and writes if the exclusive
+       ;; access was successful to `rs`.
+       ;; This instruction is sequentially consistent.
+       (StoreReleaseExclusivePair
+        (rs WritableReg)
+        (rt1 Reg)
+        (rt2 Reg)
         (rn Reg)
         (flags MemFlags))
 
@@ -2205,10 +2224,26 @@
             (_ Unit (emit (MInst.LoadAcquire ty dst addr flags))))
         dst))
 
+;; Helper for emitting `MInst.LoadAcquireExclusivePair` instructions.
+(decl load_acquire_exclusive_pair (MemFlags Reg) ValueRegs)
+(rule (load_acquire_exclusive_pair flags addr)
+      (let ((dst1 WritableReg (temp_writable_reg $I64))
+            (dst2 WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadAcquireExclusivePair dst1 dst2 addr flags))))
+        (Pair dst1 dst2)))
+
+
 ;; Helper for emitting `MInst.StoreRelease` instructions.
 (decl store_release (Type MemFlags Reg Reg) SideEffectNoResult)
 (rule (store_release ty flags src addr)
       (SideEffectNoResult.Inst (MInst.StoreRelease ty src addr flags)))
+
+;; Helper for emitting `MInst.StoreReleaseExclusivePair` instructions.
+(decl store_release_exclusive_pair (MemFlags Reg Reg Reg) Reg)
+(rule (store_release_exclusive_pair flags src1 src2 addr)
+      (let ((rs WritableReg (temp_writable_reg $I32))
+            (_ Unit (emit (MInst.StoreReleaseExclusivePair rs src1 src2 addr flags))))
+        rs))
 
 ;; Helper for generating a `tst` instruction.
 ;;

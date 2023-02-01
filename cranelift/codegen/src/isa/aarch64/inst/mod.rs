@@ -750,9 +750,20 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rn);
             collector.reg_def(rt);
         }
+        &Inst::LoadAcquireExclusivePair { rt1, rt2, rn, .. } => {
+            collector.reg_use(rn);
+            collector.reg_def(rt1);
+            collector.reg_def(rt2);
+        }
         &Inst::StoreRelease { rt, rn, .. } => {
             collector.reg_use(rn);
             collector.reg_use(rt);
+        }
+        &Inst::StoreReleaseExclusivePair { rs, rt1, rt2, rn, .. } => {
+            collector.reg_use(rn);
+            collector.reg_def(rs);
+            collector.reg_use(rt1);
+            collector.reg_use(rt2);
         }
         &Inst::Fence {} | &Inst::Csdb {} => {}
         &Inst::FpuMove64 { rd, rn } => {
@@ -1771,6 +1782,12 @@ impl Inst {
                 let rt = pretty_print_ireg(rt.to_reg(), size, allocs);
                 format!("{} {}, [{}]", op, rt, rn)
             }
+            &Inst::LoadAcquireExclusivePair { rt1, rt2, rn, .. } => {
+                let rn = pretty_print_ireg(rn, OperandSize::Size64, allocs);
+                let rt1 = pretty_print_ireg(rt1.to_reg(), OperandSize::Size64, allocs);
+                let rt2 = pretty_print_ireg(rt2.to_reg(), OperandSize::Size64, allocs);
+                format!("ldaxp {}, {}, [{}]", rt1, rt2, rn)
+            }
             &Inst::StoreRelease {
                 access_ty, rt, rn, ..
             } => {
@@ -1785,6 +1802,20 @@ impl Inst {
                 let rn = pretty_print_ireg(rn, OperandSize::Size64, allocs);
                 let rt = pretty_print_ireg(rt, size, allocs);
                 format!("{} {}, [{}]", op, rt, rn)
+            }
+            &Inst::StoreReleaseExclusivePair {
+                access_ty,
+                rs,
+                rt1,
+                rt2,
+                rn,
+                ..
+            } => {
+                let rn = pretty_print_ireg(rn, OperandSize::Size64, allocs);
+                let rs = pretty_print_ireg(rs.to_reg(), OperandSize::Size32, allocs);
+                let rt1 = pretty_print_ireg(rt1, OperandSize::Size64, allocs);
+                let rt2 = pretty_print_ireg(rt2, OperandSize::Size64, allocs);
+                format!("stlxp {}, {}, {}, [{}]", rs, rt1, rt2, rn)
             }
             &Inst::Fence {} => {
                 format!("dmb ish")

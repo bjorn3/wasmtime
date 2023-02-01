@@ -1764,6 +1764,25 @@ impl MachInstEmit for Inst {
 
                 sink.put4(enc_ldar(access_ty, rt, rn));
             }
+            &Inst::LoadAcquireExclusivePaire {
+                access_ty,
+                rt1,
+                rt2,
+                rn,
+                flags,
+            } => {
+                let rn = allocs.next(rn);
+                let rt1 = allocs.next_writable(rt1);
+                let rt2 = allocs.next_writable(rt2);
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+
+                todo!();
+                //sink.put4(enc_ldar(access_ty, rt, rn));
+            }
             &Inst::StoreRelease {
                 access_ty,
                 rt,
@@ -1779,6 +1798,27 @@ impl MachInstEmit for Inst {
                 }
 
                 sink.put4(enc_stlr(access_ty, rt, rn));
+            }
+            &Inst::StoreReleaseExclusivePaire {
+                access_ty,
+                rs,
+                rt1,
+                rt2,
+                rn,
+                flags,
+            } => {
+                let rn = allocs.next(rn);
+                let rs = allocs.next(rs);
+                let rt1 = allocs.next(rt1);
+                let rt2 = allocs.next(rt2);
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+
+                todo!();
+                //sink.put4(enc_stlr(access_ty, rt, rn));
             }
             &Inst::Fence {} => {
                 sink.put4(enc_dmb_ish()); // dmb ish

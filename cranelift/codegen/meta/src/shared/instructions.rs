@@ -3487,7 +3487,7 @@ pub(crate) fn define(
     let AtomicMem = &TypeVar::new(
         "AtomicMem",
         "Any type that can be stored in memory, which can be used in an atomic operation",
-        TypeSetBuilder::new().ints(8..64).build(),
+        TypeSetBuilder::new().ints(8..128).build(),
     );
     let x = &Operand::new("x", AtomicMem).with_doc("Value to be atomically stored");
     let a = &Operand::new("a", AtomicMem).with_doc("Value atomically loaded");
