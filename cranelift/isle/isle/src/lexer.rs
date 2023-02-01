@@ -58,6 +58,10 @@ pub enum Token {
     LParen,
     /// Right paren.
     RParen,
+    /// A boolean, e.g. `#t` or `#f`
+    Bool(bool),
+    /// A constant, e.g. `$I8`.
+    Constant(String),
     /// A symbol, e.g. `Foo`.
     Symbol(String),
     /// An integer.
@@ -227,10 +231,27 @@ impl<'a> Lexer<'a> {
                     self.advance_pos();
                 }
                 let end = self.pos.offset;
-                let s = std::str::from_utf8(&self.buf[start..end])
-                    .expect("Only ASCII characters, should be UTF-8");
-                debug_assert!(!s.is_empty());
-                Ok(Some((start_pos, Token::Symbol(s.to_string()))))
+                let s = &&self.buf[start..end];
+                assert!(!s.is_empty());
+                if s[0] == b'$' {
+                    let s = std::str::from_utf8(&s[1..])
+                        .expect("Only ASCII characters, should be UTF-8");
+                    if s.is_empty() {
+                        return Err(self.error(start_pos, "invalid empty constant"));
+                    }
+                    Ok(Some((start_pos, Token::Constant(s.to_string()))))
+                } else if s[0] == b'#' {
+                    if s == b"#t" {
+                        Ok(Some((start_pos, Token::Bool(true))))
+                    } else if s == b"#f" {
+                        Ok(Some((start_pos, Token::Bool(false))))
+                    } else {
+                        return Err(self.error(start_pos, "invalid bool literal. must be #t or #f"));
+                    }
+                } else {
+                    let s = std::str::from_utf8(s).expect("Only ASCII characters, should be UTF-8");
+                    Ok(Some((start_pos, Token::Symbol(s.to_string()))))
+                }
             }
             c @ (b'0'..=b'9' | b'-') => {
                 let start_pos = self.pos();
@@ -322,10 +343,18 @@ impl Token {
         }
     }
 
-    /// Is this a `Sym` token?
+    /// Is this a `Symbol` token?
     pub fn is_sym(&self) -> bool {
         match self {
             Token::Symbol(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Is this a `Constant` token?
+    pub fn is_const(&self) -> bool {
+        match self {
+            Token::Constant(_) => true,
             _ => false,
         }
     }

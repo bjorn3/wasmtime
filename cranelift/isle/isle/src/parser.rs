@@ -98,10 +98,7 @@ impl<'a> Parser<'a> {
     }
 
     fn is_const(&self) -> bool {
-        self.is(|tok| match tok {
-            &Token::Symbol(ref tok_s) if tok_s.starts_with("$") => true,
-            _ => false,
-        })
+        self.is(Token::is_const)
     }
 
     fn expect_lparen(&mut self) -> Result<()> {
@@ -134,6 +131,18 @@ impl<'a> Parser<'a> {
             Token::Int(i) => Ok(i),
             _ => unreachable!(),
         }
+    }
+
+    fn eat_bool(&mut self) -> Result<Option<bool>> {
+        Ok(self
+            .eat(|tok| match tok {
+                &Token::Bool(_) => true,
+                _ => false,
+            })?
+            .map(|tok| match tok {
+                Token::Bool(val) => val,
+                _ => unreachable!(),
+            }))
     }
 
     fn parse_defs(mut self) -> Result<Defs> {
@@ -201,16 +210,11 @@ impl<'a> Parser<'a> {
 
     fn parse_const(&mut self) -> Result<Ident> {
         let pos = self.pos();
-        let ident = self.parse_ident()?;
-        if ident.0.starts_with("$") {
-            let s = &ident.0[1..];
-            Ok(Ident(s.to_string(), ident.1))
-        } else {
-            Err(self.error(
-                pos,
-                "Not a constant identifier; must start with a '$'".to_string(),
-            ))
-        }
+        let s = match self.expect(Token::is_const)? {
+            Token::Constant(s) => s,
+            _ => unreachable!(),
+        };
+        self.str_to_ident(pos, &s)
     }
 
     fn parse_pragma(&mut self) -> Result<Pragma> {
@@ -500,10 +504,11 @@ impl<'a> Parser<'a> {
             let ret = self.parse_expr_inner_parens(pos)?;
             self.expect_rparen()?;
             Ok(ret)
-        } else if self.eat_sym_str("#t")? {
-            Ok(Expr::ConstInt { val: 1, pos })
-        } else if self.eat_sym_str("#f")? {
-            Ok(Expr::ConstInt { val: 0, pos })
+        } else if let Some(val) = self.eat_bool()? {
+            Ok(Expr::ConstInt {
+                val: if val { 1 } else { 0 },
+                pos,
+            })
         } else if self.is_const() {
             let val = self.parse_const()?;
             Ok(Expr::ConstPrim { val, pos })
