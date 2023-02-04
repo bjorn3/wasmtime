@@ -173,6 +173,18 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /*/*
+    /[ \t\r\n]+/; // whitespace
+    /;.*/; // comment
+    /\(/; // LParen
+    /\)/; // RParen
+    /@/; // At
+    /#t|#f/; // Bool
+    /\$\w+/; // Constant TODO not correct
+    /\w+/; // Symbol TODO not correct
+    /-?[0-9]+|-?0x[0-9a-fA-F]+/; // Int
+    */
+
     fn next_token(&mut self) -> Result<Option<(Pos, Token)>> {
         fn is_sym_first_char(c: u8) -> bool {
             match c {
