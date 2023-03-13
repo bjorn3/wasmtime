@@ -594,6 +594,26 @@ impl<'a> Verifier<'a> {
                 self.verify_sig_ref(inst, sig_ref, errors)?;
                 self.verify_value_list(inst, args, errors)?;
             }
+            Invoke {
+                func_ref,
+                ref args,
+                table,
+                ..
+            } => {
+                self.verify_func_ref(inst, func_ref, errors)?;
+                self.verify_value_list(inst, args, errors)?;
+                self.verify_jump_table(inst, table, errors)?;
+            }
+            InvokeIndirect {
+                sig_ref,
+                ref args,
+                table,
+                ..
+            } => {
+                self.verify_sig_ref(inst, sig_ref, errors)?;
+                self.verify_value_list(inst, args, errors)?;
+                self.verify_jump_table(inst, table, errors)?;
+            }
             FuncAddr { func_ref, .. } => {
                 self.verify_func_ref(inst, func_ref, errors)?;
             }
@@ -1301,6 +1321,41 @@ impl<'a> Verifier<'a> {
                     self.typecheck_block_call(inst, block, errors)?;
                 }
             }
+            ir::InstructionData::Invoke {
+                func_ref, table, ..
+            } => {
+                let sig_ref = self.func.dfg.ext_funcs[*func_ref].signature;
+                let return_types = self.func.dfg.signatures[sig_ref]
+                    .returns
+                    .iter()
+                    .map(|a| a.value_type)
+                    .collect::<Vec<_>>();
+                self.typecheck_block_call_with_extra_args(
+                    inst,
+                    &self.func.stencil.dfg.jump_tables[*table].default_block(),
+                    &return_types,
+                    errors,
+                )?;
+                for block in self.func.stencil.dfg.jump_tables[*table].as_slice() {
+                    self.typecheck_block_call_with_any_extra_args(inst, block, errors)?;
+                }
+            }
+            ir::InstructionData::InvokeIndirect { sig_ref, table, .. } => {
+                let return_types = self.func.dfg.signatures[*sig_ref]
+                    .returns
+                    .iter()
+                    .map(|a| a.value_type)
+                    .collect::<Vec<_>>();
+                self.typecheck_block_call_with_extra_args(
+                    inst,
+                    &self.func.stencil.dfg.jump_tables[*table].default_block(),
+                    &return_types,
+                    errors,
+                )?;
+                for block in self.func.stencil.dfg.jump_tables[*table].as_slice() {
+                    self.typecheck_block_call_with_any_extra_args(inst, block, errors)?;
+                }
+            }
             inst => debug_assert!(!inst.opcode().is_branch()),
         }
 
@@ -1340,6 +1395,41 @@ impl<'a> Verifier<'a> {
             .map(|&v| self.func.dfg.value_type(v));
         let args = block.args_slice(pool);
         self.typecheck_variable_args_iterator(inst, iter, args, errors)
+    }
+
+    fn typecheck_block_call_with_extra_args(
+        &self,
+        inst: Inst,
+        block: &ir::BlockCall,
+        extra_arg_types: &[Type],
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        let pool = &self.func.dfg.value_lists;
+        let iter = self
+            .func
+            .dfg
+            .block_params(block.block(pool))
+            .iter()
+            .map(|&v| self.func.dfg.value_type(v));
+        let args = block.args_slice(pool);
+        self.typecheck_variable_args_iterator_with_extra_arg_types(inst, iter, &args, extra_arg_types, errors)
+    }
+
+    fn typecheck_block_call_with_any_extra_args(
+        &self,
+        inst: Inst,
+        block: &ir::BlockCall,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        let pool = &self.func.dfg.value_lists;
+        let iter = self
+            .func
+            .dfg
+            .block_params(block.block(pool))
+            .iter()
+            .map(|&v| self.func.dfg.value_type(v));
+        let args = block.args_slice(pool);
+        self.typecheck_variable_args_iterator_with_any_extra_args(inst, iter, args, errors)
     }
 
     fn typecheck_variable_args_iterator<I: Iterator<Item = Type>>(
@@ -1382,6 +1472,98 @@ impl<'a> Verifier<'a> {
                     i,
                 ),
             ));
+        }
+        Ok(())
+    }
+
+    fn typecheck_variable_args_iterator_with_extra_arg_types<I: Iterator<Item = Type>>(
+        &self,
+        inst: Inst,
+        iter: I,
+        variable_args: &[Value],
+        extra_arg_types: &[Type],
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        let mut i = 0;
+
+        for expected_type in iter {
+            if i >= variable_args.len() + extra_arg_types.len() {
+                // Result count mismatch handled below, we want the full argument count first though
+                i += 1;
+                continue;
+            }
+            if i < variable_args.len() {
+                let arg = variable_args[i];
+                let arg_type = self.func.dfg.value_type(arg);
+                if expected_type != arg_type {
+                    errors.report((
+                        inst,
+                        self.context(inst),
+                        format!(
+                            "arg {} ({}) has type {}, expected {}",
+                            i, variable_args[i], arg_type, expected_type
+                        ),
+                    ));
+                }
+            } else {
+                let arg_type = extra_arg_types[i - variable_args.len()];
+                if expected_type != arg_type {
+                    errors.report((
+                        inst,
+                        self.context(inst),
+                        format!(
+                            "invoke return val {} has type {}, expected {}",
+                            i - variable_args.len(), arg_type, expected_type
+                        ),
+                    ));
+                }
+            }
+            i += 1;
+        }
+        if i != variable_args.len() + extra_arg_types.len() {
+            return errors.nonfatal((
+                inst,
+                self.context(inst),
+                format!(
+                    "mismatched argument count for `{}`: got {}+{}, expected {}",
+                    self.func.dfg.display_inst(inst),
+                    variable_args.len(),
+                    extra_arg_types.len(),
+                    i,
+                ),
+            ));
+        }
+        Ok(())
+    }
+
+    fn typecheck_variable_args_iterator_with_any_extra_args<I: Iterator<Item = Type>>(
+        &self,
+        inst: Inst,
+        iter: I,
+        variable_args: &[Value],
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        let mut i = 0;
+
+        for expected_type in iter {
+            if i >= variable_args.len() {
+                // typecheck_variable_args_iterator_with_extra_args allows more block params than
+                // arguments. The remaining block params will be filled out by the instruction itself.
+                break;
+            }
+            let arg = variable_args[i];
+            let arg_type = self.func.dfg.value_type(arg);
+            if expected_type != arg_type {
+                errors.report((
+                    inst,
+                    self.context(inst),
+                    format!(
+                        "arg {} ({}) has type {}, expected {}",
+                        i, variable_args[i], arg_type, expected_type
+                    ),
+                ));
+            }
+            i += 1;
         }
         Ok(())
     }
