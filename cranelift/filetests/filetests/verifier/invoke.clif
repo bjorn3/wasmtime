@@ -1,0 +1,37 @@
+test verifier
+
+function %invoke_wrong_return_type1(i32) system_v {
+fn0 = %wow(i32) -> i32 system_v
+
+block0(v0: i32):
+    invoke fn0(v0), block1, [] ; error: mismatched argument count for `invoke fn0(v0), block1, []`: got 0+1, expected 0
+block1:
+    return
+}
+
+function %invoke_wrong_return_type2(i32) system_v {
+fn0 = %wow(i32) -> i32 system_v
+
+block0(v0: i32):
+    invoke fn0(v0), block1, [] ; error: invoke return val 0 has type i32, expected f32
+block1(v1: f32):
+    return
+}
+
+function %invoke_wrong_return_type3(i32) system_v {
+fn0 = %wow(i32) -> i32 system_v
+
+block0(v0: i32):
+    invoke fn0(v0), block1, [] ; error: mismatched argument count for `invoke fn0(v0), block1, []`: got 0+1, expected 2
+block1(v1: i32, v2: f32):
+    return
+}
+
+function %invoke_wrong_return_type4(i32) system_v {
+fn0 = %wow(i32) -> i32 system_v
+
+block0(v0: i32):
+    invoke fn0(v0), block1(v0), [] ; error: invoke return val 0 has type i32, expected f32
+block1(v1: i32, v2: f32):
+    return
+}

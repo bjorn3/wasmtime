@@ -309,7 +309,9 @@ impl InstructionData {
         match self {
             Self::Jump { destination, .. } => std::slice::from_ref(destination),
             Self::Brif { blocks, .. } => blocks.as_slice(),
-            Self::BranchTable { table, .. } => jump_tables.get(*table).unwrap().all_branches(),
+            Self::BranchTable { table, .. }
+            | Self::Invoke { table, .. }
+            | Self::InvokeIndirect { table, .. } => jump_tables.get(*table).unwrap().all_branches(),
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 &[]
@@ -327,7 +329,9 @@ impl InstructionData {
         match self {
             Self::Jump { destination, .. } => std::slice::from_mut(destination),
             Self::Brif { blocks, .. } => blocks.as_mut_slice(),
-            Self::BranchTable { table, .. } => {
+            Self::BranchTable { table, .. }
+            | Self::Invoke { table, .. }
+            | Self::InvokeIndirect { table, .. } => {
                 jump_tables.get_mut(*table).unwrap().all_branches_mut()
             }
             _ => {
@@ -441,8 +445,14 @@ impl InstructionData {
         match *self {
             Self::Call {
                 func_ref, ref args, ..
+            }
+            | Self::Invoke {
+                func_ref, ref args, ..
             } => CallInfo::Direct(func_ref, args.as_slice(pool)),
             Self::CallIndirect {
+                sig_ref, ref args, ..
+            }
+            | Self::InvokeIndirect {
                 sig_ref, ref args, ..
             } => CallInfo::Indirect(sig_ref, &args.as_slice(pool)[1..]),
             Self::Ternary {
