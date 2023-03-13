@@ -1,0 +1,22 @@
+test optimize
+
+set opt_level=speed_and_size
+target aarch64
+
+function u0:24(i32) -> i8 system_v {
+    sig0 = () -> i8 system_v
+    fn0 = u0:0 sig0
+
+block0(v0: i32):
+    brif v0, block1, block2
+
+block1:
+    v1 = iconst.i8 0
+    jump block3(v1)  ; v14 = 0
+
+block2:
+    invoke fn0(), block3, []
+
+block3(v2: i8):
+    return v2
+}

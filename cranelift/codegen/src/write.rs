@@ -479,6 +479,38 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             )?;
             write_user_stack_map_entries(w, dfg, inst)
         }
+        Invoke {
+            func_ref,
+            ref args,
+            imm,
+            table,
+            ..
+        } => write!(
+            w,
+            " {}({}), {}, {}",
+            func_ref,
+            DisplayValues(args.as_slice(pool)),
+            imm,
+            jump_tables[table].display(pool),
+        ),
+        InvokeIndirect {
+            sig_ref,
+            ref args,
+            imm,
+            table,
+            ..
+        } => {
+            let args = args.as_slice(pool);
+            write!(
+                w,
+                " {}, {}({}), {}, {}",
+                sig_ref,
+                args[0],
+                DisplayValues(&args[1..]),
+                imm,
+                jump_tables[table].display(pool),
+            )
+        }
         FuncAddr { func_ref, .. } => write!(w, " {func_ref}"),
         StackLoad {
             stack_slot, offset, ..

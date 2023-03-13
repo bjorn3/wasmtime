@@ -25,7 +25,10 @@ pub fn eliminate_unreachable_code(
     while let Some(block) = pos.next_block() {
         if domtree.is_reachable(block) {
             let inst = pos.func.layout.last_inst(block).unwrap();
-            if let ir::InstructionData::BranchTable { table, .. } = pos.func.dfg.insts[inst] {
+            if let ir::InstructionData::BranchTable { table, .. }
+            | ir::InstructionData::Invoke { table, .. }
+            | ir::InstructionData::InvokeIndirect { table, .. } = pos.func.dfg.insts[inst]
+            {
                 used_tables.insert(table);
             }
             continue;

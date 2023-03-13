@@ -416,6 +416,7 @@ impl Mutator for ReplaceBlockParamWithConst {
         cfg.compute(&func);
 
         // Remove parameters in branching instructions that point to this block
+        // FIXME for invoke and invoke_indirect
         for pred in cfg.pred_iter(self.block) {
             let dfg = &mut func.dfg;
             for branch in dfg.insts[pred.inst].branch_destination_mut(&mut dfg.jump_tables) {
@@ -470,6 +471,7 @@ impl Mutator for RemoveUnusedEntities {
                         match func.dfg.insts[inst] {
                             // Add new cases when there are new instruction formats taking a `FuncRef`.
                             InstructionData::Call { func_ref, .. }
+                            | InstructionData::Invoke { func_ref, .. }
                             | InstructionData::FuncAddr { func_ref, .. } => {
                                 ext_func_usage_map
                                     .entry(func_ref)
@@ -490,6 +492,9 @@ impl Mutator for RemoveUnusedEntities {
                             match func.dfg.insts[inst] {
                                 // Keep in sync with the above match.
                                 InstructionData::Call {
+                                    ref mut func_ref, ..
+                                }
+                                | InstructionData::Invoke {
                                     ref mut func_ref, ..
                                 }
                                 | InstructionData::FuncAddr {
@@ -518,7 +523,8 @@ impl Mutator for RemoveUnusedEntities {
                 for block in func.layout.blocks() {
                     for inst in func.layout.block_insts(block) {
                         // Add new cases when there are new instruction formats taking a `SigRef`.
-                        if let InstructionData::CallIndirect { sig_ref, .. } = func.dfg.insts[inst]
+                        if let InstructionData::CallIndirect { sig_ref, .. }
+                        | InstructionData::InvokeIndirect { sig_ref, .. } = func.dfg.insts[inst]
                         {
                             signatures_usage_map
                                 .entry(sig_ref)
@@ -544,6 +550,9 @@ impl Mutator for RemoveUnusedEntities {
                                 SigRefUser::Instruction(inst) => match func.dfg.insts[inst] {
                                     // Keep in sync with the above match.
                                     InstructionData::CallIndirect {
+                                        ref mut sig_ref, ..
+                                    }
+                                    | InstructionData::InvokeIndirect {
                                         ref mut sig_ref, ..
                                     } => {
                                         *sig_ref = new_sig_ref;

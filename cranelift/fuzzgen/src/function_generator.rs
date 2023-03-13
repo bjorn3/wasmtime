@@ -1106,6 +1106,8 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         InstructionFormat::BranchTable
         | InstructionFormat::Brif
         | InstructionFormat::Jump
+        | InstructionFormat::Invoke
+        | InstructionFormat::InvokeIndirect
         | InstructionFormat::MultiAry => {
             panic!("Control-flow instructions should be handled by 'insert_terminator': {fmt:?}")
         }
@@ -1476,6 +1478,7 @@ where
         let terminator = self.resources.block_terminators[source_block.as_u32() as usize].clone();
 
         match terminator {
+            // FIXME add invoke and invoke_indirect
             BlockTerminator::Return => {
                 let types: Vec<Type> = {
                     let rets = &builder.func.signature.returns;
