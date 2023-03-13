@@ -29,9 +29,9 @@ pub struct JumpTableData {
 
 impl JumpTableData {
     /// Create a new jump table with the provided blocks.
-    pub fn new(def: BlockCall, table: &[BlockCall]) -> Self {
+    pub fn new(default: BlockCall, table: &[BlockCall]) -> Self {
         Self {
-            table: std::iter::once(def).chain(table.iter().copied()).collect(),
+            table: std::iter::once(default).chain(table.iter().copied()).collect(),
         }
     }
 
