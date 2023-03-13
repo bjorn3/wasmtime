@@ -129,12 +129,14 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                 }
             }
 
-            ir::InstructionData::BranchTable { table, .. } => {
+            ir::InstructionData::BranchTable { table, .. }
+            | ir::InstructionData::Invoke { table, .. }
+            | ir::InstructionData::InvokeIndirect { table, .. } => {
                 let pool = &self.builder.func.dfg.value_lists;
 
-                // Unlike all other jumps/branches, jump tables are
-                // capable of having the same successor appear
-                // multiple times, so we must deduplicate.
+                // Unlike all other jumps/branches, jump tables and
+                // landing pad tables are capable of having the same
+                // successor appear multiple times, so we must deduplicate.
                 let mut unique = EntitySet::<Block>::new();
                 for dest_block in self
                     .builder

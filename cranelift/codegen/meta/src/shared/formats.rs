@@ -18,6 +18,8 @@ pub(crate) struct Formats {
     pub(crate) int_compare: Rc<InstructionFormat>,
     pub(crate) int_compare_imm: Rc<InstructionFormat>,
     pub(crate) int_add_trap: Rc<InstructionFormat>,
+    pub(crate) invoke: Rc<InstructionFormat>,
+    pub(crate) invoke_indirect: Rc<InstructionFormat>,
     pub(crate) jump: Rc<InstructionFormat>,
     pub(crate) load: Rc<InstructionFormat>,
     pub(crate) load_no_offset: Rc<InstructionFormat>,
@@ -129,6 +131,19 @@ impl Formats {
                 .imm(&entities.sig_ref)
                 .value()
                 .varargs()
+                .build(),
+
+            invoke: Builder::new("Invoke")
+                .imm(&entities.func_ref)
+                .varargs()
+                .imm(&entities.jump_table)
+                .build(),
+
+            invoke_indirect: Builder::new("InvokeIndirect")
+                .imm(&entities.sig_ref)
+                .value()
+                .varargs()
+                .imm(&entities.jump_table)
                 .build(),
 
             func_addr: Builder::new("FuncAddr").imm(&entities.func_ref).build(),

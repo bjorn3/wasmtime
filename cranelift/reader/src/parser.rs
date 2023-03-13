@@ -1778,7 +1778,7 @@ impl<'a> Parser<'a> {
     fn parse_jump_table(
         &mut self,
         ctx: &mut Context,
-        def: ir::BlockCall,
+        default: ir::BlockCall,
     ) -> ParseResult<ir::JumpTable> {
         self.match_token(Token::LBracket, "expected '[' before jump table contents")?;
 
@@ -1817,7 +1817,7 @@ impl<'a> Parser<'a> {
             .function
             .dfg
             .jump_tables
-            .push(JumpTableData::new(def, &data)))
+            .push(JumpTableData::new(default, &data)))
     }
 
     // Parse a constant decl.
@@ -2677,6 +2677,50 @@ impl<'a> Parser<'a> {
                     opcode,
                     sig_ref,
                     args: args.into_value_list(&[callee], &mut ctx.function.dfg.value_lists),
+                }
+            }
+            InstructionFormat::Invoke => {
+                let func_ref = self.match_fn("expected function reference")?;
+                ctx.check_fn(func_ref, self.loc)?;
+                self.match_token(Token::LPar, "expected '(' before arguments")?;
+                let args = self.parse_value_list()?;
+                self.match_token(Token::RPar, "expected ')' after arguments")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+
+                let block_num = self.match_block("expected branch destination block")?;
+                let default_args = self.parse_opt_value_list()?;
+                let destination = ctx.function.dfg.block_call(block_num, &default_args);
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let table = self.parse_jump_table(ctx, destination)?;
+
+                InstructionData::Invoke {
+                    opcode,
+                    func_ref,
+                    args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
+                    table,
+                }
+            }
+            InstructionFormat::InvokeIndirect => {
+                let sig_ref = self.match_sig("expected signature reference")?;
+                ctx.check_sig(sig_ref, self.loc)?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let callee = self.match_value("expected SSA value callee operand")?;
+                self.match_token(Token::LPar, "expected '(' before arguments")?;
+                let args = self.parse_value_list()?;
+                self.match_token(Token::RPar, "expected ')' after arguments")?;
+
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let block_num = self.match_block("expected branch destination block")?;
+                let default_args = self.parse_opt_value_list()?;
+                let destination = ctx.function.dfg.block_call(block_num, &default_args);
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let table = self.parse_jump_table(ctx, destination)?;
+
+                InstructionData::InvokeIndirect {
+                    opcode,
+                    sig_ref,
+                    args: args.into_value_list(&[callee], &mut ctx.function.dfg.value_lists),
+                    table,
                 }
             }
             InstructionFormat::FuncAddr => {
