@@ -148,7 +148,7 @@ pub fn has_memory_fence_semantics(op: Opcode) -> bool {
         | Opcode::AtomicStore
         | Opcode::Fence
         | Opcode::Debugtrap => true,
-        Opcode::Call | Opcode::CallIndirect => true,
+        Opcode::Call | Opcode::CallIndirect | Opcode::Invoke | Opcode::InvokeIndirect => true,
         op if op.can_trap() => true,
         _ => false,
     }
@@ -179,7 +179,9 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
                 visit(inst, block_else.block(&f.dfg.value_lists), false);
             }
 
-            ir::InstructionData::BranchTable { table, .. } => {
+            ir::InstructionData::BranchTable { table, .. }
+            | ir::InstructionData::Invoke { table, .. }
+            | ir::InstructionData::InvokeIndirect { table, .. } => {
                 let pool = &f.dfg.value_lists;
                 let table = &f.stencil.dfg.jump_tables[*table];
 

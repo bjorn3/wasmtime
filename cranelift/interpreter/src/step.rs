@@ -411,6 +411,12 @@ where
 
             call_func(func, call_args, make_control_flow)?
         }
+        Opcode::Invoke => {
+            todo!();
+        }
+        Opcode::InvokeIndirect => {
+            todo!();
+        }
         Opcode::FuncAddr => {
             let func_ref = if let InstructionData::FuncAddr { func_ref, .. } = inst {
                 func_ref
