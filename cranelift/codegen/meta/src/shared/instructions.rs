@@ -314,6 +314,57 @@ fn define_control_flow(
 
     ig.push(
         Inst::new(
+            "invoke",
+            r#"
+        Direct function call which can unwind.
+
+        Call a function which has been declared in the preamble. The argument
+        types must match the function's signature. If the function unwinds,
+        execution can diverge to one of the jump table entries.
+        "#,
+            &formats.invoke,
+        )
+        .operands_in(vec![
+            Operand::new("FN", &entities.func_ref)
+                .with_doc("function to call, declared by `function`"),
+            Operand::new("args", &entities.varargs).with_doc("call arguments"),
+            Operand::new("JT", &entities.jump_table),
+        ])
+        .call()
+        .branches(),
+    );
+
+    ig.push(
+        Inst::new(
+            "invoke_indirect",
+            r#"
+        Indirect function call which can unwind.
+
+        Call the function pointed to by `callee` with the given arguments. The
+        called function must match the specified signature. If the function
+        unwinds, execution can diverge to one of the jump table entries.
+
+        Note that this is different from WebAssembly's ``call_indirect``; the
+        callee is a native address, rather than a table index. For WebAssembly,
+        `table_addr` and `load` are used to obtain a native address
+        from a table.
+        "#,
+            &formats.invoke_indirect,
+        )
+        .operands_in(vec![
+            Operand::new("SIG", &entities.sig_ref).with_doc("function signature"),
+            Operand::new("callee", iAddr).with_doc("address of function to call"),
+            Operand::new("args", &entities.varargs).with_doc("call arguments"),
+            Operand::new("JT", &entities.jump_table),
+        ])
+        .call()
+        .branches(),
+    );
+
+    // Operand::new("JT", &entities.jump_table),
+
+    ig.push(
+        Inst::new(
             "func_addr",
             r#"
         Get the address of a function.

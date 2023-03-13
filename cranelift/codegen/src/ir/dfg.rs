@@ -1000,10 +1000,13 @@ impl DataFlowGraph {
     }
 
     /// Like `call_signature` but returns none for tail call instructions.
-    fn non_tail_call_signature(&self, inst: Inst) -> Option<SigRef> {
+    fn non_tail_call_or_invoke_signature(&self, inst: Inst) -> Option<SigRef> {
         let sig = self.call_signature(inst)?;
         match self.insts[inst].opcode() {
-            ir::Opcode::ReturnCall | ir::Opcode::ReturnCallIndirect => None,
+            ir::Opcode::ReturnCall
+            | ir::Opcode::ReturnCallIndirect
+            | ir::Opcode::Invoke
+            | ir::Opcode::InvokeIndirect => None,
             _ => Some(sig),
         }
     }
@@ -1011,7 +1014,7 @@ impl DataFlowGraph {
     // Only for use by the verifier. Everyone else should just use
     // `dfg.inst_results(inst).len()`.
     pub(crate) fn num_expected_results_for_verifier(&self, inst: Inst) -> usize {
-        match self.non_tail_call_signature(inst) {
+        match self.non_tail_call_or_invoke_signature(inst) {
             Some(sig) => self.signatures[sig].returns.len(),
             None => {
                 let constraints = self.insts[inst].opcode().constraints();
@@ -1026,7 +1029,7 @@ impl DataFlowGraph {
         inst: Inst,
         ctrl_typevar: Type,
     ) -> impl iter::ExactSizeIterator<Item = Type> + 'a {
-        return match self.non_tail_call_signature(inst) {
+        return match self.non_tail_call_or_invoke_signature(inst) {
             Some(sig) => InstResultTypes::Signature(self, sig, 0),
             None => {
                 let constraints = self.insts[inst].opcode().constraints();
