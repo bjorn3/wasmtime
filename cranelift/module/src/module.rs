@@ -12,7 +12,7 @@ use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::settings::SetError;
-use cranelift_codegen::{binemit, MachReloc};
+use cranelift_codegen::MachReloc;
 use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
 use std::borrow::ToOwned;
 use std::string::String;
@@ -519,12 +519,6 @@ impl ModuleDeclarations {
     }
 }
 
-/// Information about the compiled function.
-pub struct ModuleCompiledFunction {
-    /// The size of the compiled function.
-    pub size: binemit::CodeOffset,
-}
-
 /// A `Module` is a utility for collecting functions and data objects, and linking them together.
 pub trait Module {
     /// Return the `TargetIsa` to compile for.
@@ -654,11 +648,7 @@ pub trait Module {
     /// Returns the size of the function's code and constant data.
     ///
     /// Note: After calling this function the given `Context` will contain the compiled function.
-    fn define_function(
-        &mut self,
-        func: FuncId,
-        ctx: &mut Context,
-    ) -> ModuleResult<ModuleCompiledFunction>;
+    fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> ModuleResult<()>;
 
     /// Define a function, taking the function body from the given `bytes`.
     ///
@@ -674,7 +664,7 @@ pub trait Module {
         alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
-    ) -> ModuleResult<ModuleCompiledFunction>;
+    ) -> ModuleResult<()>;
 
     /// Define a data object, producing the data contents from the given `DataContext`.
     fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()>;
@@ -756,11 +746,7 @@ impl<M: Module> Module for &mut M {
         (**self).declare_data_in_data(data, ctx)
     }
 
-    fn define_function(
-        &mut self,
-        func: FuncId,
-        ctx: &mut Context,
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> ModuleResult<()> {
         (**self).define_function(func, ctx)
     }
 
@@ -771,7 +757,7 @@ impl<M: Module> Module for &mut M {
         alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    ) -> ModuleResult<()> {
         (**self).define_function_bytes(func_id, func, alignment, bytes, relocs)
     }
 

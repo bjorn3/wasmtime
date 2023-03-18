@@ -1,14 +1,14 @@
 //! Defines `JITModule`.
 
 use crate::{compiled_blob::CompiledBlob, memory::BranchProtection, memory::Memory};
+use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings, MachReloc};
-use cranelift_codegen::{binemit::Reloc, CodegenError};
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
-    DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
+    DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations,
+    ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
 };
 use log::info;
 use std::cell::RefCell;
@@ -682,7 +682,7 @@ impl Module for JITModule {
         &mut self,
         id: FuncId,
         ctx: &mut cranelift_codegen::Context,
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    ) -> ModuleResult<()> {
         info!("defining function {}: {}", id, ctx.func.display());
         let decl = self.declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
@@ -698,9 +698,7 @@ impl Module for JITModule {
         let alignment = res.alignment as u64;
         let compiled_code = ctx.compiled_code().unwrap();
 
-        let code_size = compiled_code.code_info().total_size;
-
-        let size = code_size as usize;
+        let size = compiled_code.code_info().total_size as usize;
         let align = alignment
             .max(self.isa.function_alignment() as u64)
             .max(self.isa.symbol_alignment());
@@ -759,7 +757,7 @@ impl Module for JITModule {
             self.functions_to_finalize.push(id);
         }
 
-        Ok(ModuleCompiledFunction { size: code_size })
+        Ok(())
     }
 
     fn define_function_bytes(
@@ -769,13 +767,8 @@ impl Module for JITModule {
         alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    ) -> ModuleResult<()> {
         info!("defining function {} with bytes", id);
-        let total_size: u32 = match bytes.len().try_into() {
-            Ok(total_size) => total_size,
-            _ => Err(CodegenError::CodeTooLarge)?,
-        };
-
         let decl = self.declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
@@ -832,7 +825,7 @@ impl Module for JITModule {
             self.functions_to_finalize.push(id);
         }
 
-        Ok(ModuleCompiledFunction { size: total_size })
+        Ok(())
     }
 
     fn define_data(&mut self, id: DataId, data: &DataContext) -> ModuleResult<()> {
