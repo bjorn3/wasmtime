@@ -10,7 +10,7 @@ use crate::data_context::DataContext;
 use core::fmt::Display;
 use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
-use cranelift_codegen::ir::Function;
+use cranelift_codegen::ir::function::{Function, VersionMarker};
 use cranelift_codegen::settings::SetError;
 use cranelift_codegen::MachReloc;
 use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
@@ -54,6 +54,7 @@ impl ModuleReloc {
 
 /// A function identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuncId(u32);
 entity_impl!(FuncId, "funcid");
 
@@ -81,6 +82,7 @@ impl FuncId {
 
 /// A data object identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DataId(u32);
 entity_impl!(DataId, "dataid");
 
@@ -108,6 +110,7 @@ impl DataId {
 
 /// Linkage refers to where an entity is defined and who can see it.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Linkage {
     /// Defined outside of a module.
     Import,
@@ -166,6 +169,7 @@ impl Linkage {
 
 /// A declared name may refer to either a function or data declaration
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FuncOrDataId {
     /// When it's a FuncId
     Func(FuncId),
@@ -185,6 +189,7 @@ impl From<FuncOrDataId> for ModuleExtName {
 
 /// Information about a function which can be called.
 #[derive(Debug)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FunctionDeclaration {
     #[allow(missing_docs)]
     pub name: String,
@@ -324,6 +329,7 @@ pub type ModuleResult<T> = Result<T, ModuleError>;
 
 /// Information about a data object which can be accessed.
 #[derive(Debug)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DataDeclaration {
     #[allow(missing_docs)]
     pub name: String,
@@ -348,6 +354,7 @@ impl DataDeclaration {
 
 /// A translated `ExternalName` into something global we can handle.
 #[derive(Clone)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ModuleExtName {
     /// User defined function, converted from `ExternalName::User`.
     User {
@@ -382,7 +389,14 @@ impl Display for ModuleExtName {
 /// This provides a view to the state of a module which allows `ir::ExternalName`s to be translated
 /// into `FunctionDeclaration`s and `DataDeclaration`s.
 #[derive(Debug, Default)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModuleDeclarations {
+    /// A version marker used to ensure that serialized clif ir is never deserialized with a
+    /// different version of Cranelift.
+    // Note: This must be the first field to ensure that Serde will deserialize it before
+    // attempting to deserialize other fields that are potentially changed between versions.
+    _version_marker: VersionMarker,
+
     names: HashMap<String, FuncOrDataId>,
     functions: PrimaryMap<FuncId, FunctionDeclaration>,
     data_objects: PrimaryMap<DataId, DataDeclaration>,
