@@ -1412,7 +1412,13 @@ impl<'a> Verifier<'a> {
             .iter()
             .map(|&v| self.func.dfg.value_type(v));
         let args = block.args_slice(pool);
-        self.typecheck_variable_args_iterator_with_extra_arg_types(inst, iter, &args, extra_arg_types, errors)
+        self.typecheck_variable_args_iterator_with_extra_arg_types(
+            inst,
+            iter,
+            &args,
+            extra_arg_types,
+            errors,
+        )
     }
 
     fn typecheck_block_call_with_any_extra_args(
@@ -1486,6 +1492,9 @@ impl<'a> Verifier<'a> {
     ) -> VerifierStepResult<()> {
         let mut i = 0;
 
+        // put extra_arg_types before variable_args rather than after to play better with the ssa
+        // builder in cranelift-frontend
+
         for expected_type in iter {
             if i >= variable_args.len() + extra_arg_types.len() {
                 // Result count mismatch handled below, we want the full argument count first though
@@ -1513,7 +1522,9 @@ impl<'a> Verifier<'a> {
                         self.context(inst),
                         format!(
                             "invoke return val {} has type {}, expected {}",
-                            i - variable_args.len(), arg_type, expected_type
+                            i - variable_args.len(),
+                            arg_type,
+                            expected_type
                         ),
                     ));
                 }
