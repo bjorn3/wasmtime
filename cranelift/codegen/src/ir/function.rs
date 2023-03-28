@@ -69,13 +69,13 @@ impl<'de> Deserialize<'de> for VersionMarker {
 pub struct FunctionParameters {
     /// The first `SourceLoc` appearing in the function, serving as a base for every relative
     /// source loc in the function.
-    base_srcloc: Option<SourceLoc>,
+    pub base_srcloc: Option<SourceLoc>,
 
     /// External user-defined function references.
-    user_named_funcs: PrimaryMap<UserExternalNameRef, UserExternalName>,
+    pub user_named_funcs: PrimaryMap<UserExternalNameRef, UserExternalName>,
 
     /// Inverted mapping of `user_named_funcs`, to deduplicate internally.
-    user_ext_name_to_ref: HashMap<UserExternalName, UserExternalNameRef>,
+    pub user_ext_name_to_ref: HashMap<UserExternalName, UserExternalNameRef>,
 }
 
 impl FunctionParameters {
