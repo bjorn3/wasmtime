@@ -7,8 +7,8 @@ use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings, MachReloc};
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
-    DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations,
-    ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
+    DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations, ModuleError,
+    ModuleExtName, ModuleReloc, ModuleResult,
 };
 use log::info;
 use std::cell::RefCell;
@@ -828,7 +828,7 @@ impl Module for JITModule {
         Ok(())
     }
 
-    fn define_data(&mut self, id: DataId, data: &DataContext) -> ModuleResult<()> {
+    fn define_data(&mut self, id: DataId, data: &DataDescription) -> ModuleResult<()> {
         let decl = self.declarations.get_data_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
@@ -848,7 +848,7 @@ impl Module for JITModule {
             data_relocs: _,
             custom_segment_section: _,
             align,
-        } = data.description();
+        } = data;
 
         let size = init.size();
         let ptr = if decl.writable {
@@ -887,10 +887,7 @@ impl Module for JITModule {
             PointerWidth::U32 => Reloc::Abs4,
             PointerWidth::U64 => Reloc::Abs8,
         };
-        let relocs = data
-            .description()
-            .all_relocs(pointer_reloc)
-            .collect::<Vec<_>>();
+        let relocs = data.all_relocs(pointer_reloc).collect::<Vec<_>>();
 
         self.compiled_data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
         self.data_objects_to_finalize.push(id);
