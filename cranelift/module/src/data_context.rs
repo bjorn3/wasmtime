@@ -41,7 +41,7 @@ impl Init {
 }
 
 /// A description of a data object.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DataDescription {
     /// How the data should be initialized.
