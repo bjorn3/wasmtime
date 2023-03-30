@@ -130,8 +130,6 @@ pub struct ObjectModule {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
     per_function_section: bool,
-    anon_func_number: u64,
-    anon_data_number: u64,
 }
 
 impl ObjectModule {
@@ -151,8 +149,6 @@ impl ObjectModule {
             libcall_names: builder.libcall_names,
             known_symbols: HashMap::new(),
             per_function_section: builder.per_function_section,
-            anon_func_number: 0,
-            anon_data_number: 0,
         }
     }
 }
@@ -214,16 +210,10 @@ impl Module for ObjectModule {
     }
 
     fn declare_anonymous_function(&mut self, signature: &ir::Signature) -> ModuleResult<FuncId> {
-        // Symbols starting with .L are completely omitted from the symbol table after linking.
-        // Using hexadecimal instead of decimal for slightly smaller symbol names and often slightly
-        // faster linking.
-        let name = format!(".Lfn{:x}", self.anon_func_number);
-        self.anon_func_number += 1;
-
         let id = self.declarations.declare_anonymous_function(signature)?;
 
         let symbol_id = self.object.add_symbol(Symbol {
-            name: name.as_bytes().to_vec(),
+            name: self.declarations.get_function_decl(id).linkage_name(id).as_bytes().to_vec(),
             value: 0,
             size: 0,
             kind: SymbolKind::Text,
@@ -282,12 +272,6 @@ impl Module for ObjectModule {
     }
 
     fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId> {
-        // Symbols starting with .L are completely omitted from the symbol table after linking.
-        // Using hexadecimal instead of decimal for slightly smaller symbol names and often slightly
-        // faster linking.
-        let name = format!(".Ldata{:x}", self.anon_data_number);
-        self.anon_data_number += 1;
-
         let id = self.declarations.declare_anonymous_data(writable, tls)?;
 
         let kind = if tls {
@@ -297,7 +281,7 @@ impl Module for ObjectModule {
         };
 
         let symbol_id = self.object.add_symbol(Symbol {
-            name: name.as_bytes().to_vec(),
+            name: self.declarations.get_data_decl(id).linkage_name(id).as_bytes().to_vec(),
             value: 0,
             size: 0,
             kind,
@@ -342,12 +326,12 @@ impl Module for ObjectModule {
         info!("defining function {} with bytes", func_id);
         let decl = self.declarations.get_function_decl(func_id);
         if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+            return Err(ModuleError::InvalidImportDefinition(decl.linkage_name(func_id).into_owned()));
         }
 
         let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
         if *defined {
-            return Err(ModuleError::DuplicateDefinition(decl.name.clone()));
+            return Err(ModuleError::DuplicateDefinition(decl.linkage_name(func_id).into_owned()));
         }
         *defined = true;
 
@@ -386,12 +370,12 @@ impl Module for ObjectModule {
     fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()> {
         let decl = self.declarations.get_data_decl(data_id);
         if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+            return Err(ModuleError::InvalidImportDefinition(decl.linkage_name(data_id).into_owned()));
         }
 
         let &mut (symbol, ref mut defined) = self.data_objects[data_id].as_mut().unwrap();
         if *defined {
-            return Err(ModuleError::DuplicateDefinition(decl.name.clone()));
+            return Err(ModuleError::DuplicateDefinition(decl.linkage_name(data_id).into_owned()));
         }
         *defined = true;
 
