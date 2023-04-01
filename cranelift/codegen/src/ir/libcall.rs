@@ -140,11 +140,23 @@ impl LibCall {
                 sig.params.push(AbiParam::new(ty));
                 sig.returns.push(AbiParam::new(ty));
             }
+            LibCall::Memcpy | LibCall::Memmove => {
+                sig.params.push(AbiParam::new(I64));
+                sig.params.push(AbiParam::new(I64));
+                sig.params.push(AbiParam::new(I64));
+            }
+            LibCall::Memset => {
+                sig.params.push(AbiParam::new(I64));
+                sig.params.push(AbiParam::new(I32));
+                sig.params.push(AbiParam::new(I64));
+            }
+            LibCall::Memcmp => {
+                sig.params.push(AbiParam::new(I64));
+                sig.params.push(AbiParam::new(I64));
+                sig.params.push(AbiParam::new(I64));
+            }
+
             LibCall::Probestack
-            | LibCall::Memcpy
-            | LibCall::Memset
-            | LibCall::Memmove
-            | LibCall::Memcmp
             | LibCall::ElfTlsGetAddr
             | LibCall::ElfTlsGetOffset => unimplemented!(),
         }

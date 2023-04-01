@@ -295,6 +295,7 @@ where
         // guarantees that the user has ran that.
         let args_match = validate_signature_params(&signature.params[..], &args[..]);
         if !args_match {
+            panic!("{signature:?} {args:?}");
             return Ok(ControlFlow::Trap(CraneliftTrap::User(
                 TrapCode::BadSignature,
             )));
@@ -1427,14 +1428,14 @@ pub enum ControlFlow<'a, V> {
     Trap(CraneliftTrap),
 }
 
-impl<'a, V> ControlFlow<'a, V> {
+impl<'a, V: Debug> ControlFlow<'a, V> {
     /// For convenience, we can unwrap the [ControlFlow] state assuming that it is a
     /// [ControlFlow::Return], panicking otherwise.
     pub fn unwrap_return(self) -> Vec<V> {
         if let ControlFlow::Return(values) = self {
             values.into_vec()
         } else {
-            panic!("expected the control flow to be in the return state")
+            panic!("expected the control flow to be in the return state, but it is in {self:?}")
         }
     }
 
