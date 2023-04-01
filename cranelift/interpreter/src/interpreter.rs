@@ -239,9 +239,10 @@ impl<'a> InterpreterState<'a> {
 }
 
 impl<'a> State<'a> for InterpreterState<'a> {
-    fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function> {
+    fn get_function(&self, func_ref: FuncRef) -> Option<InterpreterFunctionRef<'a>> {
         self.functions
             .get_from_func_ref(func_ref, self.frame_stack.last().unwrap().function())
+            .map(|func| InterpreterFunctionRef::Function(func))
     }
     fn get_current_function(&self) -> &'a Function {
         self.current_frame().function()

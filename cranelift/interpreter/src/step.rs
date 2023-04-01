@@ -301,6 +301,29 @@ where
                         ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
                     }
                 }
+                InterpreterFunctionRef::Emulated(emulator, sig) => {
+                    debug_assert!(
+                        !matches!(
+                            inst.opcode(),
+                            Opcode::ReturnCall | Opcode::ReturnCallIndirect,
+                        ),
+                        "Cannot tail call to libcalls"
+                    );
+
+                    // We don't transfer control to a libcall, we just execute it and return the results
+                    let res = emulator(args);
+                    let res = match res {
+                        Err(trap) => return Ok(ControlFlow::Trap(CraneliftTrap::User(trap))),
+                        Ok(rets) => rets,
+                    };
+
+                    // Check that what the handler returned is what we expect.
+                    if validate_signature_params(&signature.returns[..], &res[..]) {
+                        ControlFlow::Assign(res)
+                    } else {
+                        ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
+                    }
+                }
             })
         };
 
@@ -371,17 +394,15 @@ where
                 .ok_or(StepError::UnknownFunction(func_ref))?;
 
             let args = args();
-            let func = match ext_data.name {
-                // These functions should be registered in the regular function store
-                ExternalName::User(_) | ExternalName::TestCase(_) => {
-                    let function = state
+            let func =
+                match ext_data.name {
+                    // These functions should be registered in the regular function store
+                    ExternalName::User(_) | ExternalName::TestCase(_) => state
                         .get_function(func_ref)
-                        .ok_or(StepError::UnknownFunction(func_ref))?;
-                    InterpreterFunctionRef::Function(function)
-                }
-                ExternalName::LibCall(libcall) => InterpreterFunctionRef::LibCall(libcall),
-                ExternalName::KnownSymbol(_) => unimplemented!(),
-            };
+                        .ok_or(StepError::UnknownFunction(func_ref))?,
+                    ExternalName::LibCall(libcall) => InterpreterFunctionRef::LibCall(libcall),
+                    ExternalName::KnownSymbol(_) => unimplemented!(),
+                };
 
             let make_control_flow = match inst.opcode() {
                 Opcode::Call => ControlFlow::Call,

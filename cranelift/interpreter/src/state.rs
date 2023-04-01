@@ -6,7 +6,7 @@ use crate::interpreter::LibCallHandler;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
     types, ExternalName, FuncRef, Function, GlobalValue, LibCall, MemFlags, Signature, StackSlot,
-    Type, Value,
+    TrapCode, Type, Value,
 };
 use cranelift_codegen::isa::CallConv;
 use smallvec::SmallVec;
@@ -22,7 +22,7 @@ use thiserror::Error;
 /// host memory and native functions can be used.
 pub trait State<'a> {
     /// Retrieve a reference to a [Function].
-    fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function>;
+    fn get_function(&self, func_ref: FuncRef) -> Option<InterpreterFunctionRef<'a>>;
     /// Retrieve a reference to the currently executing [Function].
     fn get_current_function(&self) -> &'a Function;
     /// Retrieve the handler callback for a [LibCall](cranelift_codegen::ir::LibCall)
@@ -89,6 +89,10 @@ pub trait State<'a> {
 pub enum InterpreterFunctionRef<'a> {
     Function(&'a Function),
     LibCall(LibCall),
+    Emulated(
+        Box<dyn FnOnce(SmallVec<[DataValue; 1]>) -> Result<SmallVec<[DataValue; 1]>, TrapCode>>,
+        Signature,
+    ),
 }
 
 impl<'a> InterpreterFunctionRef<'a> {
@@ -96,8 +100,8 @@ impl<'a> InterpreterFunctionRef<'a> {
         match self {
             InterpreterFunctionRef::Function(f) => f.stencil.signature.clone(),
             // CallConv here is sort of irrelevant, since we don't use it for anything
-            // FIXME handle non-64bit systems
             InterpreterFunctionRef::LibCall(lc) => lc.signature(CallConv::SystemV, types::I64),
+            InterpreterFunctionRef::Emulated(_, sig) => sig.clone(),
         }
     }
 }
