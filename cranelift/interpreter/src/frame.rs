@@ -100,6 +100,11 @@ impl<'a> Frame<'a> {
     pub fn entries_mut(&mut self) -> &mut [Option<DataValue>] {
         &mut self.registers
     }
+
+    /// Accessor for the [`Function`] of this frame.
+    pub fn function(&self) -> &'a Function {
+        self.function
+    }
 }
 
 #[cfg(test)]

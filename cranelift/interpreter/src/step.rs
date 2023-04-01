@@ -576,7 +576,13 @@ where
                 unreachable!()
             }
         }
-        Opcode::SymbolValue => unimplemented!("SymbolValue"),
+        Opcode::SymbolValue => {
+            if let InstructionData::UnaryGlobalValue { global_value, .. } = inst {
+                assign_or_memtrap(state.resolve_global_value(global_value))
+            } else {
+                unreachable!()
+            }
+        }
         Opcode::TlsValue => unimplemented!("TlsValue"),
         Opcode::GetPinnedReg => assign(state.get_pinned_reg()),
         Opcode::SetPinnedReg => {
