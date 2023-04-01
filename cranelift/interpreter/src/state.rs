@@ -5,7 +5,7 @@ use crate::interpreter::LibCallHandler;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
     ExternalName, FuncRef, Function, GlobalValue, LibCall, MemFlags, Signature, StackSlot, Type,
-    Value,
+    Value, TrapCode,
 };
 use cranelift_codegen::isa::CallConv;
 use cranelift_entity::PrimaryMap;
@@ -24,7 +24,7 @@ use thiserror::Error;
 /// SSA references in the current frame and not much else.
 pub trait State<'a, V> {
     /// Retrieve a reference to a [Function].
-    fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function>;
+    fn get_function(&self, func_ref: FuncRef) -> Option<InterpreterFunctionRef<'a, V>>;
     /// Retrieve a reference to the currently executing [Function].
     fn get_current_function(&self) -> &'a Function;
     /// Retrieve the handler callback for a [LibCall](cranelift_codegen::ir::LibCall)
@@ -86,7 +86,7 @@ pub trait State<'a, V> {
     ) -> Result<Address, MemoryError>;
 
     /// Retrieve a reference to a [Function] given its address.
-    fn get_function_from_address(&self, address: Address) -> Option<InterpreterFunctionRef<'a>>;
+    fn get_function_from_address(&self, address: Address) -> Option<InterpreterFunctionRef<'a, V>>;
 
     /// Given a global value, compute the final value for that global value, applying all operations
     /// in intermediate global values.
@@ -98,28 +98,30 @@ pub trait State<'a, V> {
     fn set_pinned_reg(&mut self, v: V);
 }
 
-pub enum InterpreterFunctionRef<'a> {
+pub enum InterpreterFunctionRef<'a, V> {
     Function(&'a Function),
     LibCall(LibCall),
+    Emulated(Box<dyn FnOnce(SmallVec<[V; 1]>) -> Result<SmallVec<[V; 1]>, TrapCode>>, Signature),
 }
 
-impl<'a> InterpreterFunctionRef<'a> {
+impl<'a, V> InterpreterFunctionRef<'a, V> {
     pub fn signature(&self) -> Signature {
         match self {
             InterpreterFunctionRef::Function(f) => f.stencil.signature.clone(),
             // CallConv here is sort of irrelevant, since we don't use it for anything
             InterpreterFunctionRef::LibCall(lc) => lc.signature(CallConv::SystemV),
+            InterpreterFunctionRef::Emulated(_, sig) => sig.clone(),
         }
     }
 }
 
-impl<'a> From<&'a Function> for InterpreterFunctionRef<'a> {
+impl<'a, V> From<&'a Function> for InterpreterFunctionRef<'a, V> {
     fn from(f: &'a Function) -> Self {
         InterpreterFunctionRef::Function(f)
     }
 }
 
-impl From<LibCall> for InterpreterFunctionRef<'_> {
+impl<V> From<LibCall> for InterpreterFunctionRef<'_, V> {
     fn from(lc: LibCall) -> Self {
         InterpreterFunctionRef::LibCall(lc)
     }
@@ -157,7 +159,7 @@ impl<'a, V> State<'a, V> for ImmutableRegisterState<'a, V>
 where
     V: Clone,
 {
-    fn get_function(&self, _func_ref: FuncRef) -> Option<&'a Function> {
+    fn get_function(&self, _func_ref: FuncRef) -> Option<InterpreterFunctionRef<'a, V>> {
         None
     }
 
@@ -220,7 +222,7 @@ where
         unimplemented!()
     }
 
-    fn get_function_from_address(&self, _address: Address) -> Option<InterpreterFunctionRef<'a>> {
+    fn get_function_from_address(&self, _address: Address) -> Option<InterpreterFunctionRef<'a, V>> {
         unimplemented!()
     }
 

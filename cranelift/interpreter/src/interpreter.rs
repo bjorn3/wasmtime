@@ -243,9 +243,10 @@ impl<'a> InterpreterState<'a> {
 }
 
 impl<'a> State<'a, DataValue> for InterpreterState<'a> {
-    fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function> {
+    fn get_function(&self, func_ref: FuncRef) -> Option<InterpreterFunctionRef<'a, DataValue>> {
         self.functions
             .get_from_func_ref(func_ref, self.frame_stack.last().unwrap().function)
+            .map(|func| InterpreterFunctionRef::Function(func))
     }
     fn get_current_function(&self) -> &'a Function {
         self.current_frame().function
@@ -417,7 +418,10 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         Address::from_parts(size, AddressRegion::Function, entry as u64, index as u64)
     }
 
-    fn get_function_from_address(&self, address: Address) -> Option<InterpreterFunctionRef<'a>> {
+    fn get_function_from_address(
+        &self,
+        address: Address,
+    ) -> Option<InterpreterFunctionRef<'a, DataValue>> {
         let index = address.offset as u32;
         if address.region != AddressRegion::Function {
             return None;
