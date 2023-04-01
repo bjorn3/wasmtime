@@ -270,6 +270,7 @@ where
             // guarantees that the user has ran that.
             let args_match = validate_signature_params(&signature.params[..], &args[..]);
             if !args_match {
+                panic!("{signature:?} {args:?}");
                 return Ok(ControlFlow::Trap(CraneliftTrap::User(
                     TrapCode::BadSignature,
                 )));
@@ -298,6 +299,7 @@ where
                     if validate_signature_params(&signature.returns[..], &res[..]) {
                         ControlFlow::Assign(res)
                     } else {
+                        panic!("{signature:?} {res:?}");
                         ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
                     }
                 }
@@ -321,6 +323,7 @@ where
                     if validate_signature_params(&signature.returns[..], &res[..]) {
                         ControlFlow::Assign(res)
                     } else {
+                        panic!("{signature:?} {res:?}");
                         ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
                     }
                 }
