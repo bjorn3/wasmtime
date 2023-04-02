@@ -419,11 +419,39 @@ where
                 panic!("{signature:?} {args:?}");
                 ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
             } else {
-                make_control_flow(func, args)
+                make_control_flow(func, call_args)
             }
         }
         Opcode::InvokeIndirect => {
-            todo!();
+            let table = if let InstructionData::InvokeIndirect { table, .. } = inst {
+                table
+            } else {
+                unreachable!()
+            };
+            let curr_func = state.get_current_function();
+            let table = &curr_func.dfg.jump_tables[table];
+
+            let args = args()?;
+            let addr_dv = DataValue::U64(arg(0)?.into_int()? as u64);
+            let addr = Address::try_from(addr_dv.clone()).map_err(StepError::MemoryError)?;
+
+            let func = state
+                .get_function_from_address(addr)
+                .ok_or_else(|| StepError::MemoryError(MemoryError::InvalidAddress(addr_dv)))?;
+
+            let call_args: SmallVec<[V; 1]> = SmallVec::from(&args[1..]);
+
+            let signature = func.signature();
+
+            // Check the types of the arguments. This is usually done by the verifier, but nothing
+            // guarantees that the user has ran that.
+            let args_match = validate_signature_params(&signature.params[..], &args[..]);
+            if !args_match {
+                panic!("{signature:?} {args:?}");
+                ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
+            } else {
+                ControlFlow::Invoke(func, call_args, table.clone())
+            }
         }
         Opcode::FuncAddr => {
             let func_ref = if let InstructionData::FuncAddr { func_ref, .. } = inst {
