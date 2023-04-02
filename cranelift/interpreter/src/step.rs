@@ -1408,6 +1408,8 @@ pub enum ControlFlow<'a, V> {
     ReturnCall(InterpreterFunctionRef<'a, V>, SmallVec<[V; 1]>),
     /// Return from the current function with the given parameters, e.g.: `return [v1, v2]`.
     Return(SmallVec<[V; 1]>),
+    /// Unwind from the current function with the given exception.
+    Unwind(SmallVec<[V; 1]>),
     /// Stop with a program-generated trap; note that these are distinct from errors that may occur
     /// during interpretation.
     Trap(CraneliftTrap),

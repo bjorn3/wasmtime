@@ -136,6 +136,7 @@ impl<'a> Interpreter<'a> {
                 }
                 ControlFlow::Trap(trap) => return Ok(ControlFlow::Trap(trap)),
                 ControlFlow::Invoke(_, _, _) => unimplemented!(),
+                ControlFlow::Unwind(_) => unimplemented!(),
             }
         }
         Err(InterpreterError::Unreachable)
