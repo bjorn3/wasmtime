@@ -90,7 +90,14 @@ pub enum InterpreterFunctionRef<'a> {
     Function(&'a Function),
     LibCall(LibCall),
     Emulated(
-        Box<dyn FnOnce(SmallVec<[DataValue; 1]>) -> Result<SmallVec<[DataValue; 1]>, TrapCode>>,
+        Box<
+            dyn FnOnce(
+                SmallVec<[DataValue; 1]>,
+            ) -> Result<
+                Result<SmallVec<[DataValue; 1]>, SmallVec<[DataValue; 1]>>,
+                TrapCode,
+            >,
+        >,
         Signature,
     ),
 }
@@ -98,11 +105,12 @@ pub enum InterpreterFunctionRef<'a> {
 impl<'a> std::fmt::Debug for InterpreterFunctionRef<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Function(arg0) => f.debug_tuple("Function").field(arg0).finish(),
-            Self::LibCall(arg0) => f.debug_tuple("LibCall").field(arg0).finish(),
-            Self::Emulated(arg0, arg1) => f
+            Self::Function(func) => f.debug_tuple("Function").field(func).finish(),
+            Self::LibCall(lib_call) => f.debug_tuple("LibCall").field(lib_call).finish(),
+            Self::Emulated(_handler, sig) => f
                 .debug_tuple("Emulated")
-                .field(&format_args!(".."))
+                .field(&format_args!("_"))
+                .field(sig)
                 .finish(),
         }
     }
