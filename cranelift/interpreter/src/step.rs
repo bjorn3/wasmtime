@@ -8,7 +8,7 @@ use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     types, AbiParam, AtomicRmwOp, Block, BlockCall, ExternalName, FuncRef, Function,
-    InstructionData, MemFlags, Opcode, TrapCode, Type, Value as ValueRef,
+    InstructionData, JumpTableData, MemFlags, Opcode, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -285,77 +285,6 @@ where
     };
 
     // Calls a function reference with the given arguments.
-    let call_func = |func_ref: InterpreterFunctionRef<'a, V>,
-                     args: SmallVec<[V; 1]>,
-                     make_ctrl_flow: fn(&'a Function, SmallVec<[V; 1]>) -> ControlFlow<'a, V>|
-     -> Result<ControlFlow<'a, V>, StepError> {
-        let signature = func_ref.signature();
-
-        // Check the types of the arguments. This is usually done by the verifier, but nothing
-        // guarantees that the user has ran that.
-        let args_match = validate_signature_params(&signature.params[..], &args[..]);
-        if !args_match {
-            panic!("{signature:?} {args:?}");
-            return Ok(ControlFlow::Trap(CraneliftTrap::User(
-                TrapCode::BadSignature,
-            )));
-        }
-
-        Ok(match func_ref {
-            InterpreterFunctionRef::Function(func) => make_ctrl_flow(func, args),
-            InterpreterFunctionRef::LibCall(libcall) => {
-                debug_assert!(
-                    !matches!(
-                        inst.opcode(),
-                        Opcode::ReturnCall | Opcode::ReturnCallIndirect,
-                    ),
-                    "Cannot tail call to libcalls"
-                );
-                let libcall_handler = state.get_libcall_handler();
-
-                // We don't transfer control to a libcall, we just execute it and return the results
-                let res = libcall_handler(libcall, args);
-                let res = match res {
-                    Err(trap) => return Ok(ControlFlow::Trap(CraneliftTrap::User(trap))),
-                    Ok(rets) => rets,
-                };
-
-                // Check that what the handler returned is what we expect.
-                if validate_signature_params(&signature.returns[..], &res[..]) {
-                    ControlFlow::Assign(res)
-                } else {
-                    panic!("{signature:?} {res:?}");
-                    ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
-                }
-            }
-            InterpreterFunctionRef::Emulated(emulator, sig) => {
-                debug_assert!(
-                    !matches!(
-                        inst.opcode(),
-                        Opcode::ReturnCall | Opcode::ReturnCallIndirect,
-                    ),
-                    "Cannot tail call to libcalls"
-                );
-                let libcall_handler = state.get_libcall_handler();
-
-                // We don't transfer control to a libcall, we just execute it and return the results
-                let res = emulator(args);
-                let res = match res {
-                    Err(trap) => return Ok(ControlFlow::Trap(CraneliftTrap::User(trap))),
-                    Ok(rets) => rets,
-                };
-
-                // Check that what the handler returned is what we expect.
-                if validate_signature_params(&signature.returns[..], &res[..]) {
-                    ControlFlow::Assign(res)
-                } else {
-                    panic!("{signature:?} {res:?}");
-                    ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
-                }
-            }
-        })
-    };
-
     // Interpret a Cranelift instruction.
     Ok(match inst.opcode() {
         Opcode::Jump => {
@@ -433,13 +362,62 @@ where
                     ExternalName::KnownSymbol(_) => unimplemented!(),
                 };
 
-            let make_control_flow = match inst.opcode() {
-                Opcode::Call => ControlFlow::Call,
-                Opcode::ReturnCall => ControlFlow::ReturnCall,
-                _ => unreachable!(),
+            let signature = func.signature();
+
+            // Check the types of the arguments. This is usually done by the verifier, but nothing
+            // guarantees that the user has ran that.
+            let args_match = validate_signature_params(&signature.params[..], &args[..]);
+            if !args_match {
+                panic!("{signature:?} {args:?}");
+                ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
+            } else {
+                match inst.opcode() {
+                    Opcode::Call => ControlFlow::Call(func, args),
+                    Opcode::ReturnCall => ControlFlow::ReturnCall(func, args),
+                    _ => unreachable!(),
+                }
+            }
+        }
+        Opcode::Invoke => {
+            let (func_ref, table) = if let InstructionData::Invoke {
+                func_ref, table, ..
+            } = inst
+            {
+                (func_ref, table)
+            } else {
+                unreachable!()
             };
 
-            call_func(func, args, make_control_flow)?
+            let curr_func = state.get_current_function();
+            let table = &curr_func.dfg.jump_tables[table];
+            let ext_data = curr_func
+                .dfg
+                .ext_funcs
+                .get(func_ref)
+                .ok_or(StepError::UnknownFunction(func_ref))?;
+
+            let args = args()?;
+            let func =
+                match ext_data.name {
+                    // These functions should be registered in the regular function store
+                    ExternalName::User(_) | ExternalName::TestCase(_) => state
+                        .get_function(func_ref)
+                        .ok_or(StepError::UnknownFunction(func_ref))?,
+                    ExternalName::LibCall(libcall) => InterpreterFunctionRef::LibCall(libcall),
+                    ExternalName::KnownSymbol(_) => unimplemented!(),
+                };
+
+            let signature = func.signature();
+
+            // Check the types of the arguments. This is usually done by the verifier, but nothing
+            // guarantees that the user has ran that.
+            let args_match = validate_signature_params(&signature.params[..], &args[..]);
+            if !args_match {
+                panic!("{signature:?} {args:?}");
+                ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
+            } else {
+                ControlFlow::Invoke(func, args, table.clone())
+            }
         }
         Opcode::CallIndirect | Opcode::ReturnCallIndirect => {
             let args = args()?;
@@ -458,10 +436,17 @@ where
                 _ => unreachable!(),
             };
 
-            call_func(func, call_args, make_control_flow)?
-        }
-        Opcode::Invoke => {
-            todo!();
+            let signature = func.signature();
+
+            // Check the types of the arguments. This is usually done by the verifier, but nothing
+            // guarantees that the user has ran that.
+            let args_match = validate_signature_params(&signature.params[..], &args[..]);
+            if !args_match {
+                panic!("{signature:?} {args:?}");
+                ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
+            } else {
+                make_control_flow(func, args)
+            }
         }
         Opcode::InvokeIndirect => {
             todo!();
@@ -1412,9 +1397,15 @@ pub enum ControlFlow<'a, V> {
     /// parameters.
     ContinueAt(Block, SmallVec<[V; 1]>),
     /// Indicates a call the given [Function] with the supplied arguments.
-    Call(&'a Function, SmallVec<[V; 1]>),
+    Call(InterpreterFunctionRef<'a, V>, SmallVec<[V; 1]>),
+    /// Indicates an invoke of the given [Function] with the supplied arguments returning to the given table.
+    Invoke(
+        InterpreterFunctionRef<'a, V>,
+        SmallVec<[V; 1]>,
+        JumpTableData,
+    ),
     /// Indicates a tail call to the given [Function] with the supplied arguments.
-    ReturnCall(&'a Function, SmallVec<[V; 1]>),
+    ReturnCall(InterpreterFunctionRef<'a, V>, SmallVec<[V; 1]>),
     /// Return from the current function with the given parameters, e.g.: `return [v1, v2]`.
     Return(SmallVec<[V; 1]>),
     /// Stop with a program-generated trap; note that these are distinct from errors that may occur

@@ -4,8 +4,8 @@ use crate::address::{Address, AddressSize};
 use crate::interpreter::LibCallHandler;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
-    ExternalName, FuncRef, Function, GlobalValue, LibCall, MemFlags, Signature, StackSlot, Type,
-    Value, TrapCode,
+    ExternalName, FuncRef, Function, GlobalValue, LibCall, MemFlags, Signature, StackSlot,
+    TrapCode, Type, Value,
 };
 use cranelift_codegen::isa::CallConv;
 use cranelift_entity::PrimaryMap;
@@ -101,7 +101,23 @@ pub trait State<'a, V> {
 pub enum InterpreterFunctionRef<'a, V> {
     Function(&'a Function),
     LibCall(LibCall),
-    Emulated(Box<dyn FnOnce(SmallVec<[V; 1]>) -> Result<SmallVec<[V; 1]>, TrapCode>>, Signature),
+    Emulated(
+        Box<dyn FnOnce(SmallVec<[V; 1]>) -> Result<SmallVec<[V; 1]>, TrapCode>>,
+        Signature,
+    ),
+}
+
+impl<'a, V: std::fmt::Debug> std::fmt::Debug for InterpreterFunctionRef<'a, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Function(arg0) => f.debug_tuple("Function").field(arg0).finish(),
+            Self::LibCall(arg0) => f.debug_tuple("LibCall").field(arg0).finish(),
+            Self::Emulated(arg0, arg1) => f
+                .debug_tuple("Emulated")
+                .field(&format_args!(".."))
+                .finish(),
+        }
+    }
 }
 
 impl<'a, V> InterpreterFunctionRef<'a, V> {
@@ -222,7 +238,10 @@ where
         unimplemented!()
     }
 
-    fn get_function_from_address(&self, _address: Address) -> Option<InterpreterFunctionRef<'a, V>> {
+    fn get_function_from_address(
+        &self,
+        _address: Address,
+    ) -> Option<InterpreterFunctionRef<'a, V>> {
         unimplemented!()
     }
 

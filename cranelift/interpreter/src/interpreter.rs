@@ -119,7 +119,7 @@ impl<'a> Interpreter<'a> {
                 }
                 ControlFlow::Call(called_function, arguments) => {
                     let returned_arguments =
-                        self.call(called_function, &arguments)?.unwrap_return();
+                        self.call(todo!(), &arguments)?.unwrap_return();
                     self.state
                         .current_frame_mut()
                         .set_all(function.dfg.inst_results(inst), returned_arguments);
@@ -127,7 +127,7 @@ impl<'a> Interpreter<'a> {
                 }
                 ControlFlow::ReturnCall(callee, args) => {
                     self.state.pop_frame();
-                    let rets = self.call(callee, &args)?.unwrap_return();
+                    let rets = self.call(todo!(), &args)?.unwrap_return();
                     return Ok(ControlFlow::Return(rets.into()));
                 }
                 ControlFlow::Return(returned_values) => {
@@ -135,6 +135,7 @@ impl<'a> Interpreter<'a> {
                     return Ok(ControlFlow::Return(returned_values));
                 }
                 ControlFlow::Trap(trap) => return Ok(ControlFlow::Trap(trap)),
+                ControlFlow::Invoke(_, _, _) => unimplemented!(),
             }
         }
         Err(InterpreterError::Unreachable)
