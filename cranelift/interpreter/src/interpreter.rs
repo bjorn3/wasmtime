@@ -118,7 +118,7 @@ impl<'a> Interpreter<'a> {
                     maybe_inst = layout.first_inst(block)
                 }
                 ControlFlow::Call(called_function, arguments) => {
-                    match self.call(called_function, &arguments)? {
+                    match self.call(todo!(), &arguments)? {
                         ControlFlow::Return(rets) => {
                             self.state
                                 .current_frame_mut()
@@ -134,7 +134,7 @@ impl<'a> Interpreter<'a> {
                 ControlFlow::ReturnCall(callee, args) => {
                     self.state.pop_frame();
 
-                    return match self.call(callee, &args)? {
+                    return match self.call(todo!(), &args)? {
                         ControlFlow::Return(rets) => Ok(ControlFlow::Return(rets)),
                         ControlFlow::Trap(trap) => Ok(ControlFlow::Trap(trap)),
                         cf => {
@@ -147,6 +147,7 @@ impl<'a> Interpreter<'a> {
                     return Ok(ControlFlow::Return(returned_values));
                 }
                 ControlFlow::Trap(trap) => return Ok(ControlFlow::Trap(trap)),
+                ControlFlow::Invoke(_, _, _) => unimplemented!(),
             }
         }
         Err(InterpreterError::Unreachable)

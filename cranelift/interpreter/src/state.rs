@@ -95,6 +95,19 @@ pub enum InterpreterFunctionRef<'a> {
     ),
 }
 
+impl<'a> std::fmt::Debug for InterpreterFunctionRef<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Function(arg0) => f.debug_tuple("Function").field(arg0).finish(),
+            Self::LibCall(arg0) => f.debug_tuple("LibCall").field(arg0).finish(),
+            Self::Emulated(arg0, arg1) => f
+                .debug_tuple("Emulated")
+                .field(&format_args!(".."))
+                .finish(),
+        }
+    }
+}
+
 impl<'a> InterpreterFunctionRef<'a> {
     pub fn signature(&self) -> Signature {
         match self {
