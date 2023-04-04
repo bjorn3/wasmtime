@@ -238,15 +238,15 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
         let formals = func.dfg.block_params(b);
         let mut summary = BlockSummary::new(&bump, formals);
 
-        for inst in func.layout.block_insts(b) {
-            for (ix, dest) in func.dfg.insts[inst]
-                .branch_destination(&func.dfg.jump_tables)
-                .iter()
-                .enumerate()
-            {
-                if let Some(edge) = OutEdge::new(&bump, &func.dfg, inst, ix, *dest) {
-                    summary.dests.push(edge);
-                }
+        let branch = func.layout.last_inst(b).unwrap();
+
+        for (ix, dest) in func.dfg.insts[branch]
+            .branch_destination(&func.dfg.jump_tables)
+            .iter()
+            .enumerate()
+        {
+            if let Some(edge) = OutEdge::new(&bump, &func.dfg, branch, ix, *dest) {
+                summary.dests.push(edge);
             }
         }
 
@@ -279,6 +279,29 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
         for formal in formals {
             let mb_old_absval = state.absvals.insert(*formal, AbstractValue::None);
             assert!(mb_old_absval.is_none());
+        }
+    }
+
+    // For each invoke ensure that the return values are never removed.
+    for b in domtree.cfg_postorder().iter().rev().copied() {
+        let branch = func.layout.last_inst(b).unwrap();
+
+        match func.dfg.insts[branch] {
+            ir::InstructionData::Invoke { .. } | ir::InstructionData::InvokeIndirect { .. } => {}
+            _ => continue,
+        }
+
+        for dest in func.dfg.insts[branch]
+            .branch_destination(&func.dfg.jump_tables)
+            .iter()
+        {
+            let formals = func.dfg.block_params(dest.block(&func.dfg.value_lists));
+            for formal in formals
+                .iter()
+                .skip(dest.args_slice(&func.dfg.value_lists).len())
+            {
+                state.absvals.insert(*formal, AbstractValue::Many);
+            }
         }
     }
 
