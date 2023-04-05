@@ -57,7 +57,8 @@ pulley-interpreter = { workspace = true, optional = true }
 [features]
 default = [
     "disas",
-    "cranelift-codegen/all-arch",
+    "cranelift-codegen/arm64",
+    "cranelift-codegen/x86",
     "cranelift-codegen/trace-log",
     "souper-harvest",
 ]

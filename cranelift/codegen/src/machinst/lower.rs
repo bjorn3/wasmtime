@@ -140,7 +140,7 @@ pub trait LowerBackend {
         ctx: &mut Lower<Self::MInst>,
         inst: Inst,
         targets: &[MachLabel],
-    ) -> Option<()>;
+    ) -> Option<Vec<InstOutput>>;
 
     /// A bit of a hack: give a fixed register that always holds the result of a
     /// `get_pinned_reg` instruction, if known.  This allows elision of moves
@@ -176,7 +176,7 @@ pub struct Lower<'func, I: VCodeInst> {
     vcode: VCodeBuilder<I>,
 
     /// VReg allocation context, given to the vcode field at build time to finalize the vcode.
-    vregs: VRegAllocator<I>,
+    pub vregs: VRegAllocator<I>,
 
     /// Mapping from `Value` (SSA value in IR) to virtual register.
     value_regs: SecondaryMap<Value, ValueRegs<Reg>>,
@@ -783,6 +783,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for &reg in self.value_regs[param].regs() {
                 let vreg = reg.to_virtual_reg().unwrap();
                 self.vcode.add_block_param(vreg);
+                log::info!("{block:?}: block param {vreg:?}");
             }
         }
         Ok(())
@@ -893,7 +894,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.cur_inst = Some(branch);
 
         // Lower the branch in ISLE.
-        backend
+        let inst_ret_args = backend
             .lower_branch(self, branch, targets)
             .unwrap_or_else(|| {
                 panic!(
@@ -904,16 +905,24 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let loc = self.srcloc(branch);
         self.finish_ir_inst(loc);
         // Add block param outputs for current block.
-        self.lower_branch_blockparam_args(bindex);
+        self.lower_branch_blockparam_args(bindex, inst_ret_args);
         Ok(())
     }
 
-    fn lower_branch_blockparam_args(&mut self, block: BlockIndex) {
+    fn lower_branch_blockparam_args(&mut self, block: BlockIndex, inst_ret_args: Vec<InstOutput>) {
+        assert_eq!(
+            self.vcode.block_order().succ_indices(block).1.len(),
+            inst_ret_args.len()
+        );
+
         let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
 
         // TODO: why not make `block_order` public?
-        for succ_idx in 0..self.vcode.block_order().succ_indices(block).1.len() {
+        for (succ_idx, args) in inst_ret_args.into_iter().enumerate() {
             branch_arg_vregs.clear();
+            for arg in args {
+                branch_arg_vregs.extend_from_slice(arg.regs());
+            }
             let (succ, args) = self.collect_block_call(block, succ_idx, &mut branch_arg_vregs);
             self.vcode.add_succ(succ, args);
         }
@@ -1032,7 +1041,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 let succ = self.vcode.block_order().succ_indices(bindex).1[0];
                 self.emit(I::gen_jump(MachLabel::from_block(succ)));
                 self.finish_ir_inst(Default::default());
-                self.lower_branch_blockparam_args(bindex);
+                self.lower_branch_blockparam_args(bindex, vec![smallvec![]]);
             }
 
             // Original block body.

@@ -1,3 +1,4 @@
+use crate::ir::immediates::Imm64;
 use crate::ir::{BlockCall, Value, ValueList};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -21,10 +22,12 @@ pub type ValueArray3 = [Value; 3];
 pub type BlockArray2 = [BlockCall; 2];
 pub type WritableReg = Writable<Reg>;
 pub type VecRetPair = Vec<RetPair>;
+pub type VecBlockCall = Vec<BlockCall>;
 pub type VecMask = Vec<u8>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
 pub type WritableValueRegs = crate::machinst::ValueRegs<WritableReg>;
 pub type InstOutput = SmallVec<[ValueRegs; 2]>;
+pub type VecInstOutput = Vec<InstOutput>;
 pub type InstOutputBuilder = Cell<InstOutput>;
 pub type BoxExternalName = Box<ExternalName>;
 pub type Range = (usize, usize);
@@ -80,6 +83,11 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn output_none(&mut self) -> InstOutput {
             smallvec::smallvec![]
+        }
+
+        #[inline]
+        fn output_none_vec(&mut self, successors: u32) -> VecInstOutput {
+            vec![smallvec::smallvec![]; successors as usize]
         }
 
         #[inline]
@@ -856,6 +864,83 @@ macro_rules! isle_prelude_caller_methods {
 
             InstOutput::new()
         }
+
+        fn gen_invoke(
+            &mut self,
+            sig_ref: SigRef,
+            extname: ExternalName,
+            dist: RelocDistance,
+            args @ (inputs, off): ValueSlice,
+            id: Imm64,
+            landingpads: &VecBlockCall,
+            targets: &Box<VecMachLabel>,
+        ) -> VecInstOutput {
+            let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
+            let sig = &self.lower_ctx.dfg().signatures[sig_ref];
+            let num_rets = sig.returns.len();
+            let caller = <$abicaller>::from_func(
+                self.lower_ctx.sigs(),
+                sig_ref,
+                &extname,
+                IsTailCall::No,
+                dist,
+                caller_conv,
+                self.backend.flags().clone(),
+            );
+
+            assert_eq!(
+                inputs.len(&self.lower_ctx.dfg().value_lists) - off,
+                sig.params.len()
+            );
+
+            crate::machinst::isle::gen_invoke_common(
+                &mut self.lower_ctx,
+                num_rets,
+                caller,
+                args,
+                id,
+                targets,
+                landingpads,
+            )
+        }
+
+        fn gen_invoke_indirect(
+            &mut self,
+            sig_ref: SigRef,
+            val: Value,
+            args @ (inputs, off): ValueSlice,
+            id: Imm64,
+            landingpads: &VecBlockCall,
+            targets: &Box<VecMachLabel>,
+        ) -> VecInstOutput {
+            let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
+            let ptr = self.put_in_reg(val);
+            let sig = &self.lower_ctx.dfg().signatures[sig_ref];
+            let num_rets = sig.returns.len();
+            let caller = <$abicaller>::from_ptr(
+                self.lower_ctx.sigs(),
+                sig_ref,
+                ptr,
+                IsTailCall::No,
+                caller_conv,
+                self.backend.flags().clone(),
+            );
+
+            assert_eq!(
+                inputs.len(&self.lower_ctx.dfg().value_lists) - off,
+                sig.params.len()
+            );
+
+            crate::machinst::isle::gen_invoke_common(
+                &mut self.lower_ctx,
+                num_rets,
+                caller,
+                args,
+                id,
+                targets,
+                landingpads,
+            )
+        }
     };
 }
 
@@ -900,7 +985,80 @@ pub fn gen_call_common<M: ABIMachineSpec>(
         outputs.push(retval_regs);
     }
 
-    caller.emit_call(ctx);
+    caller.emit_call(ctx, None, smallvec::smallvec![]);
+
+    outputs
+}
+
+pub fn gen_invoke_common<M: ABIMachineSpec>(
+    ctx: &mut Lower<'_, M::I>,
+    num_rets: usize,
+    mut caller: CallSite<M>,
+    args: ValueSlice,
+    id: Imm64,
+    alternate_targets: &[MachLabel],
+    landingpads: &VecBlockCall,
+) -> VecInstOutput {
+    gen_call_common_args(ctx, &mut caller, args);
+
+    // Handle retvals prior to emitting call, so the
+    // constraints are on the call instruction; but buffer the
+    // instructions till after the call.
+    let mut outputs = vec![InstOutput::new()];
+    for _ in 0..alternate_targets.len() {
+        outputs.push(InstOutput::new());
+    }
+    // We take the *last* `num_rets` returns of the sig:
+    // this skips a StructReturn, if any, that is present.
+    let sigdata_num_rets = caller.num_rets(ctx.sigs());
+    debug_assert!(num_rets <= sigdata_num_rets);
+    for i in (sigdata_num_rets - num_rets)..sigdata_num_rets {
+        let retval_regs = caller.gen_retval(ctx, i);
+        outputs[0].push(retval_regs);
+    }
+
+    assert_eq!(landingpads.len(), alternate_targets.len());
+    log::info!("landingpads: {landingpads:?}");
+    let landingpad_arg_counts = landingpads
+        .iter()
+        .map(|landingpad| {
+            let landingpad_block = landingpad.block(&ctx.dfg().value_lists);
+            let landingpad_block_params = ctx.dfg().block_params(landingpad_block);
+            let landingpad_args = landingpad.args_slice(&ctx.dfg().value_lists);
+            let landingpad_arg_count = landingpad_block_params.len() - landingpad_args.len();
+
+            for param_idx in 0..landingpad_arg_count {
+                let param_ty = ctx.dfg().value_type(landingpad_block_params[param_idx]);
+                assert_eq!(param_ty, M::word_type()); // FIXME move this validation to the verifier
+            }
+
+            landingpad_arg_count
+        })
+        .collect::<Vec<_>>();
+
+    let landingpad_argvals = (0..landingpad_arg_counts.iter().copied().max().unwrap_or(0))
+        .map(|i| caller.gen_landingpad_argval(ctx, i))
+        .collect::<Vec<_>>();
+
+    for (landingpad_idx, (landingpad, landingpad_arg_count)) in
+        landingpads.iter().zip(landingpad_arg_counts).enumerate()
+    {
+        let succ_idx = landingpad_idx + 1;
+        let landingpad_block = landingpad.block(&ctx.dfg().value_lists);
+        for param_idx in 0..landingpad_arg_count {
+            let arg = landingpad_argvals[param_idx];
+            log::info!("landingpad param {landingpad_block}: {arg:?}");
+            outputs[succ_idx].push(landingpad_argvals[param_idx]);
+        }
+    }
+    log::info!("{outputs:?}");
+
+    caller.emit_call(ctx, Some(id), alternate_targets.iter().copied().collect());
+
+    // FIXME move jump to default target from backends to here
+    // FIXME merge the call and jump into a single instruction to prevent regalloc from
+    //       putting any moves for landingpads after the call.
+    // FIXME all backends except aarch64 miss this jump
 
     outputs
 }

@@ -14,6 +14,8 @@
 
 ;; Instruction lowering result: a vector of `ValueRegs`.
 (type InstOutput (primitive InstOutput))
+;; Branch instruction lowering result: a vector of `ValueRegs` for each destination.
+(type VecInstOutput (primitive VecInstOutput))
 ;; (Mutable) builder to incrementally construct an `InstOutput`.
 (type InstOutputBuilder extern (enum))
 
@@ -62,6 +64,11 @@
 ;; Construct an empty `InstOutput`.
 (decl output_none () InstOutput)
 (extern constructor output_none output_none)
+
+;; Construct an empty `VecInstOutput`.
+(decl output_none_vec (u32) VecInstOutput)
+(extern constructor output_none_vec output_none_vec)
+
 
 ;; Construct a single-element `InstOutput`.
 (spec (output arg)
@@ -232,6 +239,11 @@
 (extern constructor jump_table_size jump_table_size)
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type VecBlockCall extern (enum))
+
+(decl landingpads (JumpTable) VecBlockCall)
+(extern constructor landingpads landingpads)
 
 ;; Extractor to get a `ValueSlice` out of a `ValueList`.
 (decl value_list_slice (ValueSlice) ValueList)

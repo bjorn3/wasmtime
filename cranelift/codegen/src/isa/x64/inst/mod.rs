@@ -3,6 +3,7 @@
 pub use emit_state::EmitState;
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
+use crate::ir::immediates::Imm64;
 use crate::ir::{types, ExternalName, LibCall, TrapCode, Type};
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::{pretty_print_reg, show_ireg_sized};
@@ -49,6 +50,12 @@ pub struct ReturnCallInfo<T> {
 
     /// A temporary for use when moving the return address.
     pub tmp: WritableGpr,
+
+    /// Id for this invoke. `None` for `call` instructions and synthetic calls.
+    // FIXME maybe distinguish synthetic calls and explicit call instructions?
+    pub id: Option<Imm64>,
+    /// Locations of the alternate targets for an `invoke` instruction.
+    pub alternate_targets: SmallVec<[MachLabel; 0]>,
 }
 
 #[test]
@@ -1660,6 +1667,7 @@ impl PrettyPrint for Inst {
                     new_stack_arg_size,
                     tmp,
                     dest,
+                    ..
                 } = &**info;
                 let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8);
                 let mut s = format!("return_call_known {dest:?} ({new_stack_arg_size}) tmp={tmp}");
@@ -1677,6 +1685,7 @@ impl PrettyPrint for Inst {
                     new_stack_arg_size,
                     tmp,
                     dest,
+                    ..
                 } = &**info;
                 let callee = pretty_print_reg(*dest, 8);
                 let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8);

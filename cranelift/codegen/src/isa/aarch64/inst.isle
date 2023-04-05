@@ -1858,6 +1858,9 @@
 (extern constructor branch_target branch_target)
 (convert MachLabel BranchTarget branch_target)
 
+(decl targets_count (MachLabelSlice) u32)
+(extern constructor targets_count targets_count)
+
 (decl targets_jt_space (BoxVecMachLabel) CodeOffset)
 (extern constructor targets_jt_space targets_jt_space)
 
@@ -4413,6 +4416,12 @@
 
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
+
+(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice Imm64 VecBlockCall BoxVecMachLabel) VecInstOutput)
+(extern constructor gen_invoke gen_invoke)
+
+(decl gen_invoke_indirect (SigRef Value ValueSlice Imm64 VecBlockCall BoxVecMachLabel) VecInstOutput)
+(extern constructor gen_invoke_indirect gen_invoke_indirect)
 
 ;; Helpers for pinned register manipulation.
 

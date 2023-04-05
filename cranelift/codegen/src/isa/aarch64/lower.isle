@@ -14,7 +14,7 @@
 ;; blocks while we lower, the fallthrough in the new order is not (necessarily)
 ;; the same as the fallthrough in CLIF. So, we use the explicitly-provided
 ;; target.
-(decl partial lower_branch (Inst MachLabelSlice) Unit)
+(decl partial lower_branch (Inst MachLabelSlice) VecInstOutput)
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3113,20 +3113,21 @@
 ;; `brif` following `icmp`
 (rule (lower_branch (brif (maybe_uextend (icmp cc x @ (value_type ty) y)) _ _) (two_targets taken not_taken))
       (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y ty))
-            (cond Cond (cond_code (flags_and_cc_cc comparison))))
-        (emit_side_effect
-         (with_flags_side_effect (flags_and_cc_flags comparison)
-                                 (cond_br taken
-                                          not_taken
-                                          (cond_br_cond cond))))))
+            (cond Cond (cond_code (flags_and_cc_cc comparison)))
+            (_ Unit (emit_side_effect
+              (with_flags_side_effect (flags_and_cc_flags comparison)
+                                      (cond_br taken not_taken
+                                       (cond_br_cond cond))))))
+         (output_none_vec 2)))
 
 ;; `brif` following `fcmp`
 (rule (lower_branch (brif (maybe_uextend (fcmp cc x @ (value_type (ty_scalar_float ty)) y)) _ _) (two_targets taken not_taken))
-      (let ((cond Cond (fp_cond_code cc)))
-       (emit_side_effect
-        (with_flags_side_effect (fpu_cmp (scalar_size ty) x y)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
+      (let ((cond Cond (fp_cond_code cc))
+            (_ Unit (emit_side_effect
+             (with_flags_side_effect (fpu_cmp (scalar_size ty) x y)
+                                     (cond_br taken not_taken
+                                      (cond_br_cond cond))))))
+        (output_none_vec 2)))
 
 ;; standard `brif`
 (rule -1 (lower_branch (brif c @ (value_type $I128) _ _) (two_targets taken not_taken))
@@ -3134,23 +3135,26 @@
             (c ValueRegs (put_in_regs c))
             (c_lo Reg (value_regs_get c 0))
             (c_hi Reg (value_regs_get c 1))
-            (rt Reg (orr $I64 c_lo c_hi)))
-       (emit_side_effect
-        (with_flags_side_effect flags
-         (cond_br taken not_taken (cond_br_not_zero rt (operand_size $I64)))))))
+            (rt Reg (orr $I64 c_lo c_hi))
+            (_ Unit (emit_side_effect
+             (with_flags_side_effect flags
+              (cond_br taken not_taken (cond_br_not_zero rt (operand_size $I64)))))))
+        (output_none_vec 2)))
 (rule -2 (lower_branch (brif c @ (value_type ty) _ _) (two_targets taken not_taken))
       (if (ty_int_ref_scalar_64 ty))
       (let ((flags ProducesFlags (flags_to_producesflags c))
-            (rt Reg (put_in_reg_zext64 c)))
-       (emit_side_effect
-        (with_flags_side_effect flags
-         (cond_br taken not_taken (cond_br_not_zero rt (operand_size $I64)))))))
+            (rt Reg (put_in_reg_zext64 c))
+            (_ Unit (emit_side_effect
+             (with_flags_side_effect flags
+              (cond_br taken not_taken (cond_br_not_zero rt (operand_size $I64)))))))
+        (output_none_vec 2)))
 
 ;; Special lowerings for `tbnz` - "Test bit and Branch if Nonzero"
 (rule 1 (lower_branch (brif (band x @ (value_type ty) (u64_from_iconst n)) _ _)
                      (two_targets taken not_taken))
   (if-let bit (test_and_compare_bit_const ty n))
-  (emit_side_effect (tbnz taken not_taken x bit)))
+  (let ((_ Unit (emit_side_effect (tbnz taken not_taken x bit))))
+    (output_none_vec 2)))
 
 ;; Special lowering for `tbz` - "Test bit and Branch if Zero"
 (rule 1 (lower_branch (brif (icmp (IntCC.Equal)
@@ -3159,7 +3163,8 @@
                                   (u64_from_iconst 0)) _ _)
                      (two_targets taken not_taken))
   (if-let bit (test_and_compare_bit_const ty n))
-  (emit_side_effect (tbz taken not_taken x bit)))
+  (let ((_ Unit (emit_side_effect (tbz taken not_taken x bit))))
+    (output_none_vec 2)))
 
 (decl pure partial test_and_compare_bit_const (Type u64) u8)
 (extern constructor test_and_compare_bit_const test_and_compare_bit_const)
@@ -3167,15 +3172,34 @@
 ;;; Rules for `jump` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower_branch (jump _) (single_target label))
-      (emit_side_effect (aarch64_jump label)))
+      (let ((_ Unit (emit_side_effect (aarch64_jump label))))
+        (output_none_vec 1)))
 
 ;;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `targets` contains the default target with the list of branch targets
 ;; concatenated.
-(rule (lower_branch (br_table idx _) (jump_table_targets default targets))
-      (let ((jt_size u32 (jump_table_size targets))
+(rule (lower_branch (br_table idx _) targets)
+      (if-let (jump_table_targets default_target jt_targets) targets)
+      (let ((jt_size u32 (jump_table_size jt_targets))
             (_ InstOutput (side_effect
-                  (emit_island (targets_jt_space targets))))
-            (ridx Reg (put_in_reg_zext32 idx)))
-       (br_table_impl (u32_as_u64 jt_size) ridx default targets)))
+                  (emit_island (targets_jt_space jt_targets))))
+            (ridx Reg (put_in_reg_zext32 idx))
+            (_ Unit (br_table_impl (u32_as_u64 jt_size) ridx default_target jt_targets)))
+        (output_none_vec (targets_count targets))))
+
+;;;; Rules for invokes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower_branch (invoke (func_ref_data sig_ref extname dist) inputs id jump_table) (jump_table_targets default alternate_targets))
+      (let ((results VecInstOutput
+                  (gen_invoke sig_ref extname dist inputs id (landingpads jump_table) alternate_targets))
+            ; FIXME move into gen_invoke
+            (_ Unit (emit_side_effect (aarch64_jump (branch_target default)))))
+        results))
+
+(rule (lower_branch (invoke_indirect sig_ref val inputs id jump_table) (jump_table_targets default alternate_targets))
+      (let ((results VecInstOutput
+                  (gen_invoke_indirect sig_ref val inputs id (landingpads jump_table) alternate_targets))
+            ; FIXME move into gen_invoke_indirect
+            (_ Unit (emit_side_effect (aarch64_jump (branch_target default)))))
+        results))

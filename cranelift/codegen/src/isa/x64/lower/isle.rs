@@ -12,7 +12,8 @@ use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::immediates::*;
 use crate::ir::types::*;
 use crate::ir::{
-    BlockCall, Inst, InstructionData, LibCall, MemFlags, Opcode, TrapCode, Value, ValueList,
+    BlockCall, Inst, InstructionData, JumpTable, LibCall, MemFlags, Opcode, TrapCode, Value,
+    ValueList,
 };
 use crate::isa::x64::abi::X64CallSite;
 use crate::isa::x64::inst::{args::*, regs, ReturnCallInfo};
@@ -38,6 +39,7 @@ type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
 type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type VecArgPair = Vec<ArgPair>;
 type BoxSyntheticAmode = Box<SyntheticAmode>;
+type VecMachLabel = Vec<MachLabel>;
 
 /// When interacting with the external assembler (see `external.rs`), we
 /// need to fix the types we'll use.
@@ -66,7 +68,7 @@ pub(crate) fn lower_branch(
     backend: &X64Backend,
     branch: Inst,
     targets: &[MachLabel],
-) -> Option<()> {
+) -> Option<Vec<InstOutput>> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
     let mut isle_ctx = IsleContext { lower_ctx, backend };
@@ -77,6 +79,16 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(X64CallSite);
     isle_assembler_methods!();
+
+    fn targets_count(&mut self, elements: &MachLabelSlice) -> u32 {
+        elements.len() as u32
+    }
+
+    fn landingpads(&mut self, jump_table: JumpTable) -> VecBlockCall {
+        self.lower_ctx.dfg().jump_tables[jump_table]
+            .as_slice()
+            .to_vec()
+    }
 
     #[inline]
     fn operand_size_of_type_32_64(&mut self, ty: Type) -> OperandSize {

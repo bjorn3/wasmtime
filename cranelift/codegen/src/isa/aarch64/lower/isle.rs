@@ -12,7 +12,7 @@ use super::{
     MemLabel, MoveWideConst, MoveWideOp, Opcode, OperandSize, Reg, SImm9, ScalarSize,
     ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
 };
-use crate::ir::{condcodes, ArgumentExtension};
+use crate::ir::{condcodes, ArgumentExtension, JumpTable};
 use crate::isa;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm, ReturnCallInfo};
 use crate::isa::aarch64::AArch64Backend;
@@ -60,7 +60,7 @@ pub(crate) fn lower_branch(
     backend: &AArch64Backend,
     branch: Inst,
     targets: &[MachLabel],
-) -> Option<()> {
+) -> Option<Vec<InstOutput>> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
     let mut isle_ctx = IsleContext { lower_ctx, backend };
@@ -75,6 +75,12 @@ pub struct ExtendedValue {
 impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(AArch64CallSite);
+
+    fn landingpads(&mut self, jump_table: JumpTable) -> VecBlockCall {
+        self.lower_ctx.dfg().jump_tables[jump_table]
+            .as_slice()
+            .to_vec()
+    }
 
     fn sign_return_address_disabled(&mut self) -> Option<()> {
         if self.backend.isa_flags.sign_return_address() {
@@ -536,6 +542,10 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
     fn branch_target(&mut self, label: MachLabel) -> BranchTarget {
         BranchTarget::Label(label)
+    }
+
+    fn targets_count(&mut self, elements: &MachLabelSlice) -> u32 {
+        elements.len() as u32
     }
 
     fn targets_jt_space(&mut self, elements: &BoxVecMachLabel) -> CodeOffset {

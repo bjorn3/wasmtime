@@ -1,6 +1,6 @@
 //! Implementation of the standard x64 ABI.
 
-use crate::ir::{self, types, LibCall, MemFlags, Signature, TrapCode};
+use crate::ir::{self, types, LibCall, MemFlags, Signature, TrapCode, Type};
 use crate::ir::{types::*, ExternalName};
 use crate::isa;
 use crate::isa::winch;
@@ -316,6 +316,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         ArgsOrRets::Rets => {
                             get_intreg_for_retval(call_conv, flags, next_gpr, last_slot)
                         }
+                        ArgsOrRets::LandingpadArgs => {
+                            assert!(call_conv == isa::CallConv::SystemV);
+                            get_intreg_for_retval(call_conv, flags, next_gpr, last_slot)
+                        }
                     }
                 } else {
                     match args_or_rets {
@@ -323,6 +327,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                             get_fltreg_for_arg(call_conv, next_vreg, next_param_idx)
                         }
                         ArgsOrRets::Rets => get_fltreg_for_retval(call_conv, next_vreg, last_slot),
+                        ArgsOrRets::LandingpadArgs => {
+                            panic!("Float not allowed as landingpad args");
+                        }
                     }
                 };
                 next_param_idx += 1;
@@ -879,6 +886,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             callee_pop_size,
             callee_conv: call_conv,
             caller_conv: call_conv,
+            id: None,
+            alternate_targets: smallvec![],
         })));
         insts
     }
@@ -1011,6 +1020,8 @@ impl X64CallSite {
                     uses,
                     tmp,
                     new_stack_arg_size,
+                    id: None,
+                    alternate_targets: smallvec![],
                 });
                 ctx.emit(Inst::ReturnCallKnown { info });
             }
@@ -1027,6 +1038,8 @@ impl X64CallSite {
                     uses,
                     tmp,
                     new_stack_arg_size,
+                    id: None,
+                    alternate_targets: smallvec![],
                 });
                 ctx.emit(Inst::ReturnCallUnknown { info });
             }
@@ -1036,6 +1049,8 @@ impl X64CallSite {
                     uses,
                     tmp,
                     new_stack_arg_size,
+                    id: None,
+                    alternate_targets: smallvec![],
                 });
                 ctx.emit(Inst::ReturnCallUnknown { info });
             }

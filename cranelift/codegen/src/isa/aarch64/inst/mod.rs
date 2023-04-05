@@ -1,6 +1,7 @@
 //! This module defines aarch64-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
+use crate::ir::immediates::Imm64;
 use crate::ir::types::{F128, F16, F32, F64, I128, I16, I32, I64, I8, I8X16};
 use crate::ir::{types, MemFlags, Type};
 use crate::isa::{CallConv, FunctionAlignment};
@@ -87,6 +88,11 @@ pub struct ReturnCallInfo<T> {
     pub new_stack_arg_size: u32,
     /// API key to use to restore the return address, if any.
     pub key: Option<APIKey>,
+    /// Id for this invoke. `None` for `call` instructions and synthetic calls.
+    // FIXME maybe distinguish synthetic calls and explicit call instructions?
+    pub id: Option<Imm64>,
+    /// Locations of the alternate targets for an `invoke` instruction.
+    pub alternate_targets: SmallVec<[MachLabel; 0]>,
 }
 
 fn count_zero_half_words(mut value: u64, num_half_words: u8) -> usize {
@@ -2565,10 +2571,10 @@ impl Inst {
                     format!("{op} {rd}, {rn}")
                 }
             }
-            &Inst::Call { .. } => format!("bl 0"),
+            &Inst::Call { ref info } => format!("bl 0 {info:x?}"),
             &Inst::CallInd { ref info } => {
                 let rn = pretty_print_reg(info.dest);
-                format!("blr {rn}")
+                format!("blr {rn}, {info:x?}")
             }
             &Inst::ReturnCall { ref info } => {
                 let mut s = format!(

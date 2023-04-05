@@ -56,7 +56,7 @@ pub fn run(options: &Options) -> Result<()> {
     };
 
     unsafe {
-        std::env::set_var("RUST_BACKTRACE", "0"); // Disable backtraces to reduce verbosity
+        //std::env::set_var("RUST_BACKTRACE", "0"); // Disable backtraces to reduce verbosity
     }
 
     for (func, _) in test_file.functions {
@@ -423,7 +423,7 @@ impl Mutator for ReplaceBlockParamWithConst {
             let dfg = &mut func.dfg;
             for branch in dfg.insts[pred.inst].branch_destination_mut(&mut dfg.jump_tables) {
                 if branch.block(&dfg.value_lists) == self.block {
-                    branch.remove(param_index, &mut dfg.value_lists);
+                    //branch.remove(param_index, &mut dfg.value_lists);
                 }
             }
         }

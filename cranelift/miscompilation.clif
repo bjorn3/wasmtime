@@ -1,0 +1,14 @@
+target aarch64
+
+function u0:2(i64 sret) system_v {
+    sig0 = () -> i64 system_v
+    fn0 = colocated u0:1 sig0 ; Instance { def: Item(DefId(0:8 ~ std_example[da18]::get_stackp)), substs: [] }
+
+block0(v0: i64):
+;
+; _1 = get_stackp()
+    v1 = call fn0()
+    v2 = iconst.i64 0
+    store notrap v2, v0  ; v2 = 0
+    return
+}
