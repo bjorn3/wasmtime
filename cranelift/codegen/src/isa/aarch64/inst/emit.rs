@@ -2931,7 +2931,7 @@ impl MachInstEmit for Inst {
                     let offset = sink.cur_offset();
                     sink.push_user_stack_map(state, offset, s);
                 }
-                sink.add_call_site();
+                sink.add_call_site(info.id, info.alternate_targets.clone());
 
                 if info.callee_pop_size > 0 {
                     let callee_pop_size =
@@ -2949,7 +2949,7 @@ impl MachInstEmit for Inst {
                     let offset = sink.cur_offset();
                     sink.push_user_stack_map(state, offset, s);
                 }
-                sink.add_call_site();
+                sink.add_call_site(info.id, info.alternate_targets.clone());
 
                 if info.callee_pop_size > 0 {
                     let callee_pop_size =
@@ -2970,7 +2970,7 @@ impl MachInstEmit for Inst {
                 // for the target, but rather a function relocation.
                 sink.add_reloc(Reloc::Arm64Call, &**callee, 0);
                 sink.put4(enc_jump26(0b000101, 0));
-                sink.add_call_site();
+                sink.add_call_site(info.id, info.alternate_targets.clone());
 
                 // `emit_return_call_common_sequence` emits an island if
                 // necessary, so we can safely disable the worst-case-size check
@@ -2985,7 +2985,7 @@ impl MachInstEmit for Inst {
                     targets: vec![],
                 }
                 .emit(sink, emit_info, state);
-                sink.add_call_site();
+                sink.add_call_site(info.id, info.alternate_targets.clone());
 
                 // `emit_return_call_common_sequence` emits an island if
                 // necessary, so we can safely disable the worst-case-size check
@@ -3380,6 +3380,8 @@ impl MachInstEmit for Inst {
                         caller_callconv: CallConv::SystemV,
                         callee_callconv: CallConv::SystemV,
                         callee_pop_size: 0,
+                        id: None,
+                        alternate_targets: smallvec![],
                     }),
                 }
                 .emit(sink, emit_info, state);
@@ -3440,6 +3442,8 @@ impl MachInstEmit for Inst {
                         caller_callconv: CallConv::AppleAarch64,
                         callee_callconv: CallConv::AppleAarch64,
                         callee_pop_size: 0,
+                        id: None,
+                        alternate_targets: smallvec![],
                     }),
                 }
                 .emit(sink, emit_info, state);

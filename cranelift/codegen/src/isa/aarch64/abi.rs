@@ -1,6 +1,7 @@
 //! Implementation of a standard AArch64 ABI.
 
 use crate::ir;
+use crate::ir::immediates::Imm64;
 use crate::ir::types;
 use crate::ir::types::*;
 use crate::ir::MemFlags;
@@ -151,6 +152,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // 8 vector registers at once.
             ArgsOrRets::Rets => {
                 (8, 16) // x0-x7 and v0-v7
+            }
+
+            ArgsOrRets::LandingpadArgs => {
+                assert!(call_conv == isa::CallConv::SystemV);
+                (2, 2) // x0-x1, FIXME, not v0-v1
             }
         };
 
@@ -1023,6 +1029,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         callee_conv: isa::CallConv,
         caller_conv: isa::CallConv,
         callee_pop_size: u32,
+        id: Option<Imm64>,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
     ) -> SmallVec<[Inst; 2]> {
         let mut insts = SmallVec::new();
         match &dest {
@@ -1035,6 +1043,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     caller_callconv: caller_conv,
                     callee_callconv: callee_conv,
                     callee_pop_size,
+                    id,
+                    alternate_targets,
                 }),
             }),
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
@@ -1052,6 +1062,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                         caller_callconv: caller_conv,
                         callee_callconv: callee_conv,
                         callee_pop_size,
+                        id,
+                        alternate_targets,
                     }),
                 });
             }
@@ -1064,6 +1076,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     caller_callconv: caller_conv,
                     callee_callconv: callee_conv,
                     callee_pop_size,
+                    id,
+                    alternate_targets,
                 }),
             }),
         }
@@ -1106,6 +1120,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 caller_callconv: call_conv,
                 callee_callconv: call_conv,
                 callee_pop_size: 0,
+                id: None,
+                alternate_targets: smallvec![],
             }),
         });
         insts
@@ -1299,6 +1315,8 @@ impl AArch64CallSite {
             uses,
             new_stack_arg_size,
             key: select_api_key(isa_flags, isa::CallConv::Tail, true),
+            id: None,
+            alternate_targets: smallvec![],
         });
 
         match dest {

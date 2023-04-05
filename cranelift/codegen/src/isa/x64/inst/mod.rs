@@ -3,6 +3,7 @@
 pub use emit_state::EmitState;
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
+use crate::ir::immediates::Imm64;
 use crate::ir::{types, ExternalName, LibCall, TrapCode, Type};
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::{pretty_print_reg, show_ireg_sized};
@@ -48,6 +49,11 @@ pub struct CallInfo {
     pub callee_pop_size: u32,
     /// The calling convention of the callee.
     pub callee_conv: CallConv,
+    /// Id for this invoke. `None` for `call` instructions and synthetic calls.
+    // FIXME maybe distinguish synthetic calls and explicit call instructions?
+    pub id: Option<Imm64>,
+    /// Locations of the alternate targets for an `invoke` instruction.
+    pub alternate_targets: SmallVec<[MachLabel; 0]>,
 }
 
 /// Out-of-line data for return-calls, to keep the size of `Inst` down.
@@ -62,6 +68,12 @@ pub struct ReturnCallInfo {
 
     /// A temporary for use when moving the return address.
     pub tmp: WritableGpr,
+
+    /// Id for this invoke. `None` for `call` instructions and synthetic calls.
+    // FIXME maybe distinguish synthetic calls and explicit call instructions?
+    pub id: Option<Imm64>,
+    /// Locations of the alternate targets for an `invoke` instruction.
+    pub alternate_targets: SmallVec<[MachLabel; 0]>,
 }
 
 #[test]
@@ -545,16 +557,20 @@ impl Inst {
         clobbers: PRegSet,
         callee_pop_size: u32,
         callee_conv: CallConv,
+        id: Option<Imm64>,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
     ) -> Inst {
         Inst::CallKnown {
             dest,
-            info: Some(Box::new(CallInfo {
+            info: Box::new(CallInfo {
                 uses,
                 defs,
                 clobbers,
                 callee_pop_size,
                 callee_conv,
-            })),
+                id,
+                alternate_targets,
+            }),
         }
     }
 
@@ -565,17 +581,21 @@ impl Inst {
         clobbers: PRegSet,
         callee_pop_size: u32,
         callee_conv: CallConv,
+        id: Option<Imm64>,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
     ) -> Inst {
         dest.assert_regclass_is(RegClass::Int);
         Inst::CallUnknown {
             dest,
-            info: Some(Box::new(CallInfo {
+            info: Box::new(CallInfo {
                 uses,
                 defs,
                 clobbers,
                 callee_pop_size,
                 callee_conv,
-            })),
+                id,
+                alternate_targets,
+            }),
         }
     }
 
@@ -1676,6 +1696,7 @@ impl PrettyPrint for Inst {
                     uses,
                     new_stack_arg_size,
                     tmp,
+                    ..
                 } = &**info;
                 let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8);
                 let mut s =
@@ -1693,6 +1714,7 @@ impl PrettyPrint for Inst {
                     uses,
                     new_stack_arg_size,
                     tmp,
+                    ..
                 } = &**info;
                 let callee = pretty_print_reg(*callee, 8);
                 let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8);
@@ -2350,7 +2372,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 defs,
                 clobbers,
                 ..
-            } = &mut **info.as_mut().expect("CallInfo is expected in this path");
+            } = &mut **info;
             debug_assert_ne!(*dest, ExternalName::LibCall(LibCall::Probestack));
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
@@ -2368,7 +2390,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 clobbers,
                 callee_conv,
                 ..
-            } = &mut **info.as_mut().expect("CallInfo is expected in this path");
+            } = &mut **info;
             match dest {
                 RegMem::Reg { reg } if *callee_conv == CallConv::Winch => {
                     // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
