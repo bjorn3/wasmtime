@@ -9,7 +9,7 @@
 ;; A variant of the main lowering constructor term, used for branches.
 ;; The only difference is that it gets an extra argument holding a vector
 ;; of branch targets to be used.
-(decl partial lower_branch (Inst MachLabelSlice) Unit)
+(decl partial lower_branch (Inst MachLabelSlice) VecInstOutput)
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3518,31 +3518,38 @@
 ;; Rules for `jump` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower_branch (jump _) (single_target target))
-      (emit_side_effect (jmp_known target)))
+      (let ((_ Unit (emit_side_effect (jmp_known target))))
+        (output_none_vec 1)))
 
 ;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 2 (lower_branch (brif (maybe_uextend (icmp cc a b)) _ _) (two_targets then else))
-        (emit_side_effect (jmp_cond_icmp (emit_cmp cc a b) then else)))
+        (let ((_ Unit (emit_side_effect (jmp_cond_icmp (emit_cmp cc a b) then else))))
+          (output_none_vec 2)))
 
 (rule 2 (lower_branch (brif (maybe_uextend (fcmp cc a b)) _ _) (two_targets then else))
-        (emit_side_effect (jmp_cond_fcmp (emit_fcmp cc a b) then else)))
+        (let ((_ Unit (emit_side_effect (jmp_cond_fcmp (emit_fcmp cc a b) then else))))
+          (output_none_vec 2)))
 
 (rule 2 (lower_branch (brif (maybe_uextend (vany_true a)) _ _) (two_targets then else))
-        (emit_side_effect (jmp_cond_icmp (emit_vany_true a) then else)))
+        (let ((_ Unit (emit_side_effect (jmp_cond_icmp (emit_vany_true a) then else))))
+          (output_none_vec 2)))
 
 (rule 2 (lower_branch (brif (maybe_uextend (vall_true a)) _ _) (two_targets then else))
-        (emit_side_effect (jmp_cond_icmp (emit_vall_true a) then else)))
+        (let ((_ Unit (emit_side_effect (jmp_cond_icmp (emit_vall_true a) then else))))
+          (output_none_vec 2)))
 
 (rule 1 (lower_branch (brif val @ (value_type $I128) _ _)
                       (two_targets then else))
-      (emit_side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.Z) val) then else)))
+      (let ((_ Unit (emit_side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.Z) val) then else))))
+        (output_none_vec 2)))
 
 (rule (lower_branch (brif val @ (value_type (ty_int_bool_or_ref)) _ _)
                     (two_targets then else))
-      (emit_side_effect (with_flags_side_effect
+      (let ((_ Unit (emit_side_effect (with_flags_side_effect
                           (cmp_zero_int_bool_ref val)
-                          (jmp_cond (CC.NZ) then else))))
+                          (jmp_cond (CC.NZ) then else)))))
+        (output_none_vec 2)))
 
 
 ;; Compare an I128 value to zero, returning a flags result suitable for making a
@@ -3568,15 +3575,33 @@
 
 ;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower_branch (br_table idx @ (value_type ty) _) (jump_table_targets default_target jt_targets))
+(rule (lower_branch (br_table idx @ (value_type ty) _) targets)
+      (if-let (jump_table_targets default_target jt_targets) targets)
       (let ((size OperandSize (raw_operand_size_of_type ty))
             (jt_size u32 (jump_table_size jt_targets))
             (size_reg Reg (imm ty (u32_as_u64 jt_size)))
             (idx_reg Gpr (extend_to_gpr idx $I64 (ExtendKind.Zero)))
             (clamped_idx Reg (with_flags_reg
               (x64_cmp size idx_reg size_reg)
-              (cmove ty (CC.B) idx_reg size_reg))))
-      (emit_side_effect (jmp_table_seq ty clamped_idx default_target jt_targets))))
+              (cmove ty (CC.B) idx_reg size_reg)))
+            (_ Unit (emit_side_effect (jmp_table_seq ty clamped_idx default_target jt_targets))))
+        (output_none_vec (targets_count targets))))
+
+;;;; Rules for invokes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower_branch (invoke (func_ref_data sig_ref extname dist) inputs id jump_table) (jump_table_targets default alternate_targets))
+      (let ((results VecInstOutput
+                  (gen_invoke sig_ref extname dist inputs id (landingpads jump_table) alternate_targets))
+            ; FIXME move into gen_invoke
+            (_ Unit (emit_side_effect (jmp_known default))))
+        results))
+
+(rule (lower_branch (invoke_indirect sig_ref val inputs id jump_table) (jump_table_targets default alternate_targets))
+      (let ((results VecInstOutput
+                  (gen_invoke_indirect sig_ref val inputs id (landingpads jump_table) alternate_targets))
+            ; FIXME move into gen_invoke_indirect
+            (_ Unit (emit_side_effect (jmp_known default))))
+        results))
 
 ;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

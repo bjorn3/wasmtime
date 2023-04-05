@@ -100,6 +100,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             isa::CallConv::Winch,
             "riscv64 does not support the 'winch' calling convention yet"
         );
+        assert!(args_or_rets != ArgsOrRets::LandingpadArgs);
 
         // All registers that can be used as parameters or rets.
         // both start and end are included.

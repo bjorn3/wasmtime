@@ -1559,7 +1559,7 @@ impl<I: VCodeInst> VRegAllocator<I> {
         debug_assert_eq!(old_alias, None);
     }
 
-    fn resolve_vreg_alias(&self, mut vreg: regalloc2::VReg) -> regalloc2::VReg {
+    pub fn resolve_vreg_alias(&self, mut vreg: regalloc2::VReg) -> regalloc2::VReg {
         // We prevent cycles from existing by resolving targets of
         // aliases eagerly before setting them. If the target resolves
         // to the origin of the alias, then a cycle would be created

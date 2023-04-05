@@ -1,0 +1,16 @@
+test compile
+target aarch64
+
+function u0:0() system_v {
+    sig0 = () system_v
+    fn0 = u0:1 sig0
+
+block0:
+    invoke fn0(), block1, [block2]
+
+block1:
+    trap unreachable
+
+block2(v0: i64) cold:
+    trap user0
+}

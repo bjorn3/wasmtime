@@ -1611,7 +1611,7 @@ pub(crate) fn emit(
             // beginning of the immediate field.
             emit_reloc(sink, Reloc::X86CallPCRel4, &call_info.dest, -4);
             sink.put4(0);
-            sink.add_call_site();
+            sink.add_call_site(call_info.id, call_info.alternate_targets.clone());
 
             // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.
@@ -1639,7 +1639,7 @@ pub(crate) fn emit(
             // beginning of the immediate field.
             emit_reloc(sink, Reloc::X86CallPCRel4, &call_info.dest, -4);
             sink.put4(0);
-            sink.add_call_site();
+            sink.add_call_site(call_info.id, call_info.alternate_targets.clone());
         }
 
         Inst::ReturnCallUnknown { info: call_info } => {
@@ -1651,7 +1651,7 @@ pub(crate) fn emit(
                 target: RegMem::reg(callee),
             }
             .emit(sink, info, state);
-            sink.add_call_site();
+            sink.add_call_site(call_info.id, call_info.alternate_targets.clone());
         }
 
         Inst::CallUnknown {
@@ -1693,7 +1693,7 @@ pub(crate) fn emit(
                 sink.push_user_stack_map(state, offset, s);
             }
 
-            sink.add_call_site();
+            sink.add_call_site(call_info.id, call_info.alternate_targets.clone());
 
             // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.

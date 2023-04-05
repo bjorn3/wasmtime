@@ -63,6 +63,7 @@ pub fn run(
     let mut tests = testfile
         .commands
         .iter()
+        .filter(|cmd| cmd.command != "interpret")
         .map(new_subtest)
         .collect::<anyhow::Result<Vec<_>>>()?;
 

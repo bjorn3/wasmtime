@@ -99,6 +99,7 @@
 //! ABI. See each platform's `abi.rs` implementation for details.
 
 use crate::entity::SecondaryMap;
+use crate::ir::immediates::Imm64;
 use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, Signature};
 use crate::isa::TargetIsa;
@@ -268,6 +269,8 @@ pub enum ArgsOrRets {
     Args,
     /// Return values.
     Rets,
+    /// Landingpad arguments.
+    LandingpadArgs,
 }
 
 /// Abstract location for a machine-specific ABI impl to translate into the
@@ -599,6 +602,11 @@ pub struct CallInfo<T> {
     /// caller, if any. (Used for popping stack arguments with the `tail`
     /// calling convention.)
     pub callee_pop_size: u32,
+    /// Id for this invoke. `None` for `call` instructions and synthetic calls.
+    // FIXME maybe distinguish synthetic calls and explicit call instructions?
+    pub id: Option<Imm64>,
+    /// Locations of the alternate targets for an `invoke` instruction.
+    pub alternate_targets: SmallVec<[MachLabel; 0]>,
 }
 
 impl<T> CallInfo<T> {
@@ -613,6 +621,8 @@ impl<T> CallInfo<T> {
             caller_conv: call_conv,
             callee_conv: call_conv,
             callee_pop_size: 0,
+            id: None,
+            alternate_targets: smallvec![],
         }
     }
 
@@ -626,6 +636,8 @@ impl<T> CallInfo<T> {
             caller_conv: self.caller_conv,
             callee_conv: self.callee_conv,
             callee_pop_size: self.callee_pop_size,
+            id: self.id,
+            alternate_targets: self.alternate_targets,
         }
     }
 }
@@ -644,21 +656,24 @@ impl Sig {
 /// ABI information shared between body (callee) and caller.
 #[derive(Clone, Debug)]
 pub struct SigData {
-    /// Currently both return values and arguments are stored in a continuous space vector
-    /// in `SigSet::abi_args`.
+    /// Currently return values, arguments and landingpad args are stored in a continuous space
+    /// vector in `SigSet::abi_args`.
     ///
     /// ```plain
-    ///                  +----------------------------------------------+
-    ///                  | return values                                |
-    ///                  | ...                                          |
-    ///   rets_end   --> +----------------------------------------------+
-    ///                  | arguments                                    |
-    ///                  | ...                                          |
-    ///   args_end   --> +----------------------------------------------+
-    ///
+    ///                             +----------------------------------------------+
+    ///                             | return values                                |
+    ///                             | ...                                          |
+    ///   rets_end              --> +----------------------------------------------+
+    ///                             | arguments                                    |
+    ///                             | ...                                          |
+    ///   args_end              --> +----------------------------------------------+
+    ///                             | landingpad_args                              |
+    ///                             | ...                                          |
+    ///   landingpad_args_end   --> +----------------------------------------------+
     /// ```
     ///
-    /// Note we only store two offsets as rets_end == args_start, and rets_start == prev.args_end.
+    /// Note we only store three offsets as args_end == landingpad_args_start,
+    /// rets_end == args_start, and rets_start == prev.args_end.
     ///
     /// Argument location ending offset (regs or stack slots). Stack offsets are relative to
     /// SP on entry to function.
@@ -671,6 +686,11 @@ pub struct SigData {
     ///
     /// This is a index into the `SigSet::abi_args`.
     rets_end: u32,
+
+    /// Landingpad args location ending offset.
+    ///
+    /// This is a index into the `SigSet::abi_args`.
+    landingpad_args_end: u32,
 
     /// Space on stack used to store arguments. We're storing the size in u32 to
     /// reduce the size of the struct.
@@ -892,13 +912,25 @@ impl SigSet {
             return Err(CodegenError::ImplLimitExceeded);
         }
 
+        let (sized_stack_landingpad_arg_space, _) = M::compute_arg_locs(
+            sig.call_conv,
+            flags,
+            &[crate::ir::AbiParam::new(I64), crate::ir::AbiParam::new(I64)], // FIXME
+            ArgsOrRets::LandingpadArgs,
+            false,
+            ArgsAccumulator::new(&mut self.abi_args),
+        )?;
+        let landingpad_args_end = u32::try_from(self.abi_args.len()).unwrap();
+        assert!(sized_stack_landingpad_arg_space == 0);
+
         trace!(
-            "ABISig: sig {:?} => args end = {} rets end = {}
+            "ABISig: sig {:?} => args end = {} rets end = {} landingpad args end = {}
              arg stack = {} ret stack = {} stack_ret_arg = {:?}",
             sig,
             args_end,
             rets_end,
-            sized_stack_arg_space,
+            landingpad_args_end,
+            sized_stack_landingpad_arg_space,
             sized_stack_ret_space,
             need_stack_return_area,
         );
@@ -907,6 +939,7 @@ impl SigSet {
         Ok(SigData {
             args_end,
             rets_end,
+            landingpad_args_end,
             sized_stack_arg_space,
             sized_stack_ret_space,
             stack_ret_arg,
@@ -920,6 +953,15 @@ impl SigSet {
         // Please see comments in `SigSet::from_func_sig` of how we store the offsets.
         let start = usize::try_from(sig_data.rets_end).unwrap();
         let end = usize::try_from(sig_data.args_end).unwrap();
+        &self.abi_args[start..end]
+    }
+
+    /// Get this signature's ABI arguments.
+    pub fn landingpad_args(&self, sig: Sig) -> &[ABIArg] {
+        let sig_data = &self.sigs[sig];
+        // Please see comments in `SigSet::from_func_sig` of how we store the offsets.
+        let start = usize::try_from(sig_data.args_end).unwrap();
+        let end = usize::try_from(sig_data.landingpad_args_end).unwrap();
         &self.abi_args[start..end]
     }
 
@@ -943,7 +985,14 @@ impl SigSet {
     pub fn rets(&self, sig: Sig) -> &[ABIArg] {
         let sig_data = &self.sigs[sig];
         // Please see comments in `SigSet::from_func_sig` of how we store the offsets.
-        let start = usize::try_from(sig.prev().map_or(0, |prev| self.sigs[prev].args_end)).unwrap();
+
+        // FIXME maybe return langingpads too here? we will need to unconditionally add the
+        // landingpad args to the defs of the call instruction in that case.
+        let start = usize::try_from(
+            sig.prev()
+                .map_or(0, |prev| self.sigs[prev].landingpad_args_end),
+        )
+        .unwrap();
         let end = usize::try_from(sig_data.rets_end).unwrap();
         &self.abi_args[start..end]
     }
@@ -2352,6 +2401,50 @@ impl<M: ABIMachineSpec> CallSite<M> {
         (insts, value_regs)
     }
 
+    /// Define a landingpad argument value after the call returns.
+    pub fn gen_landingpad_argval(&mut self, ctx: &mut Lower<M::I>, idx: usize) -> ValueRegs<Reg> {
+        let mut into_regs: SmallVec<[Reg; 2]> = smallvec![];
+        let arg = ctx.sigs().landingpad_args(ctx.abi().sig)[idx].clone();
+        match arg {
+            ABIArg::Slots { ref slots, .. } => {
+                for slot in slots {
+                    match slot {
+                        // Extension mode doesn't matter because we're copying out, not in,
+                        // and we ignore high bits in our own registers by convention.
+                        &ABIArgSlot::Reg { reg, ty, .. } => {
+                            let into_reg = ctx.alloc_tmp(ty).only_reg().unwrap();
+                            if let Some(def) = self.defs.iter().find(|def| def.preg == reg.into()) {
+                                ctx.vregs
+                                    .set_vreg_alias(into_reg.to_reg(), def.vreg.to_reg());
+                            } else {
+                                self.defs.push(CallRetPair {
+                                    vreg: into_reg,
+                                    preg: reg.into(),
+                                });
+                            }
+                            into_regs.push(into_reg.to_reg());
+                        }
+                        &ABIArgSlot::Stack { .. } => {
+                            panic!("ABIArgSlot::Stack not supported in landingpad position");
+                        }
+                    }
+                }
+            }
+            ABIArg::StructArg { .. } => {
+                panic!("StructArg not supported in landingpad position");
+            }
+            ABIArg::ImplicitPtrArg { .. } => {
+                panic!("ImplicitPtrArg not supported in landingpad position");
+            }
+        }
+
+        match *into_regs {
+            [a] => ValueRegs::one(a),
+            [a, b] => ValueRegs::two(a, b),
+            _ => panic!("Expected to see one or two slots only from {:?}", arg),
+        }
+    }
+
     /// Emit the call itself.
     ///
     /// The returned instruction should have proper use- and def-sets according
@@ -2365,7 +2458,12 @@ impl<M: ABIMachineSpec> CallSite<M> {
     ///
     /// This function should only be called once, as it is allowed to re-use
     /// parts of the `CallSite` object in emitting instructions.
-    pub fn emit_call(&mut self, ctx: &mut Lower<M::I>) {
+    pub fn emit_call(
+        &mut self,
+        ctx: &mut Lower<M::I>,
+        id: Option<Imm64>,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
+    ) {
         let word_type = M::word_type();
         if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg {
             let rd = ctx.alloc_tmp(word_type).only_reg().unwrap();
@@ -2418,6 +2516,10 @@ impl<M: ABIMachineSpec> CallSite<M> {
         // function that establish the SP invariants that are relied on elsewhere and are generated
         // after the register allocator has run and thus cannot have register allocator-inserted
         // references to SP offsets.)
+        log::info!(
+            "{dest:?}({uses:?}) -> ({defs:?}) clobbers {clobbers:?}",
+            dest = self.dest,
+        );
         for inst in M::gen_call(
             &self.dest,
             tmp,
@@ -2429,6 +2531,8 @@ impl<M: ABIMachineSpec> CallSite<M> {
                 callee_conv: call_conv,
                 caller_conv: self.caller_conv,
                 callee_pop_size,
+                id,
+                alternate_targets,
             },
         )
         .into_iter()

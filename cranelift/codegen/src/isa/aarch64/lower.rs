@@ -7,6 +7,8 @@
 //!
 //! - Floating-point immediates (FIMM instruction).
 
+use alloc::vec::Vec;
+
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::pcc::{FactContext, PccResult};
 use crate::ir::Inst as IRInst;
@@ -123,7 +125,7 @@ impl LowerBackend for AArch64Backend {
         ctx: &mut Lower<Inst>,
         ir_inst: IRInst,
         targets: &[MachLabel],
-    ) -> Option<()> {
+    ) -> Option<Vec<InstOutput>> {
         isle::lower_branch(ctx, self, ir_inst, targets)
     }
 

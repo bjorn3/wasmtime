@@ -14,6 +14,7 @@ use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
+use alloc::vec::Vec;
 use smallvec::{smallvec, SmallVec};
 use target_lexicon::Triple;
 
@@ -187,7 +188,7 @@ fn emit_vm_call(
         outputs.push(retval_regs.only_reg().unwrap());
     }
 
-    abi.emit_call(ctx);
+    abi.emit_call(ctx, None, smallvec![]);
 
     for inst in retval_insts {
         ctx.emit(inst);
@@ -321,7 +322,7 @@ impl LowerBackend for X64Backend {
         ctx: &mut Lower<Inst>,
         ir_inst: IRInst,
         targets: &[MachLabel],
-    ) -> Option<()> {
+    ) -> Option<Vec<InstOutput>> {
         isle::lower_branch(ctx, self, ir_inst, targets)
     }
 

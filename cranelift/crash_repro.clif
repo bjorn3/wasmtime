@@ -1,0 +1,24 @@
+test compile
+target aarch64
+
+function u0:15() system_v {
+    sig0 = (i64) -> i64 system_v
+    fn0 = colocated u0:9 sig0
+
+                                block0:
+                                    v13 = iconst.i64 0
+                                    v32 = iconst.i64 0
+@0013                               brif v32, block7, block6  ; v32 = 0
+
+                                block6:
+@0014                               trap user0
+
+                                block7:
+@0016                               invoke fn0(v13), 0, block26, [block27]  ; v13 = 0
+
+                                block27(v14: i64) cold:
+@0016                               trap user0
+
+                                block26(v15: i64):
+@0016                               trap user0
+}
