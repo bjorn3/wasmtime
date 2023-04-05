@@ -3472,6 +3472,12 @@
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
 
+;(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice JumpTable) SideEffectNoResult)
+;(extern constructor gen_invoke gen_invoke)
+
+;(decl gen_invoke_indirect (SigRef Value ValueSlice JumpTable) SideEffectNoResult)
+;(extern constructor gen_invoke_indirect gen_invoke_indirect)
+
 ;; Helpers for pinned register manipulation.
 
 (decl write_pinned_reg (Reg) SideEffectNoResult)

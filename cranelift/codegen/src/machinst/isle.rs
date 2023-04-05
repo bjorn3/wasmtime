@@ -744,6 +744,29 @@ macro_rules! isle_prelude_caller_methods {
 
             self.gen_call_common(abi, num_rets, caller, args)
         }
+
+        /*
+        fn gen_invoke(
+            &mut self,
+            sig_ref: SigRef,
+            extname: ExternalName,
+            dist: RelocDistance,
+            args @ (inputs, off): ValueSlice,
+            jump_table: JumpTable,
+        ) -> SideEffectNoResult {
+            todo!();
+        }
+
+        fn gen_invoke_indirect(
+            &mut self,
+            sig_ref: SigRef,
+            val: Value,
+            args @ (inputs, off): ValueSlice,
+            jump_table: JumpTable,
+        ) -> SideEffectNoResult {
+            todo!();
+        }
+        */
     };
 }
 
