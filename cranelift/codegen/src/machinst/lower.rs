@@ -925,6 +925,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn lower_branch_blockparam_args(&mut self, block: BlockIndex) {
+        // FIXME update this function for invoke/invoke_indirect to add the return values and
+        // exception values as necessary
+
         // TODO: why not make `block_order` public?
         for succ_idx in 0..self.vcode.block_order().succ_indices(block).1.len() {
             // Avoid immutable borrow by explicitly indexing.
