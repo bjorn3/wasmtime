@@ -140,7 +140,7 @@ pub trait LowerBackend {
         ctx: &mut Lower<Self::MInst>,
         inst: Inst,
         targets: &[MachLabel],
-    ) -> Option<()>;
+    ) -> Option<Vec<InstOutput>>;
 
     /// A bit of a hack: give a fixed register that always holds the result of a
     /// `get_pinned_reg` instruction, if known.  This allows elision of moves
@@ -176,7 +176,7 @@ pub struct Lower<'func, I: VCodeInst> {
     vcode: VCodeBuilder<I>,
 
     /// VReg allocation context, given to the vcode field at build time to finalize the vcode.
-    vregs: VRegAllocator<I>,
+    pub vregs: VRegAllocator<I>,
 
     /// Mapping from `Value` (SSA value in IR) to virtual register.
     value_regs: SecondaryMap<Value, ValueRegs<Reg>>,
@@ -779,6 +779,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for &reg in self.value_regs[param].regs() {
                 let vreg = reg.to_virtual_reg().unwrap();
                 self.vcode.add_block_param(vreg);
+                log::info!("{block:?}: block param {vreg:?}");
             }
         }
         Ok(())
@@ -889,7 +890,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.cur_inst = Some(branch);
 
         // Lower the branch in ISLE.
-        backend
+        let inst_ret_args = backend
             .lower_branch(self, branch, targets)
             .unwrap_or_else(|| {
                 panic!(
@@ -900,13 +901,18 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let loc = self.srcloc(branch);
         self.finish_ir_inst(loc);
         // Add block param outputs for current block.
-        self.lower_branch_blockparam_args(bindex);
+        self.lower_branch_blockparam_args(bindex, inst_ret_args);
         Ok(())
     }
 
-    fn lower_branch_blockparam_args(&mut self, block: BlockIndex) {
+    fn lower_branch_blockparam_args(&mut self, block: BlockIndex, inst_ret_args: Vec<InstOutput>) {
+        assert_eq!(
+            self.vcode.block_order().succ_indices(block).1.len(),
+            inst_ret_args.len()
+        );
+
         // TODO: why not make `block_order` public?
-        for succ_idx in 0..self.vcode.block_order().succ_indices(block).1.len() {
+        for (succ_idx, args) in inst_ret_args.into_iter().enumerate() {
             // Avoid immutable borrow by explicitly indexing.
             let (opt_inst, succs) = self.vcode.block_order().succ_indices(block);
             let inst = opt_inst.expect("lower_branch_blockparam_args called on a critical edge!");
@@ -917,14 +923,30 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // `branch_destination`. If that assumption is violated, the branch targets returned
             // here will not match the clif.
             let branches = self.f.dfg.insts[inst].branch_destination(&self.f.dfg.jump_tables);
-            let branch_args = branches[succ_idx].args_slice(&self.f.dfg.value_lists);
+            let branch_args = args
+                .into_iter()
+                .chain(
+                    // FIXME maybe push back BlockCall handling to the backend specific lower_branch
+                    // method too?
+                    branches[succ_idx]
+                        .args_slice(&self.f.dfg.value_lists)
+                        .iter()
+                        .map(|&arg| {
+                            debug_assert!(self.f.dfg.value_is_real(arg));
+                            let arg = self.f.dfg.resolve_aliases(arg);
+                            self.put_value_in_regs(arg)
+                        }),
+                )
+                .collect::<Vec<_>>();
 
             let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
-            for &arg in branch_args {
-                debug_assert!(self.f.dfg.value_is_real(arg));
-                let regs = self.put_value_in_regs(arg);
-                branch_arg_vregs.extend_from_slice(regs.regs());
+            for arg in branch_args {
+                for vreg in arg.regs() {
+                    let vreg = self.vregs.resolve_vreg_alias(vreg.into());
+                    branch_arg_vregs.push(vreg.into());
+                }
             }
+            log::info!("{block:?} -> {succ:?}({branch_arg_vregs:?})");
             self.vcode.add_succ(succ, &branch_arg_vregs[..]);
         }
     }

@@ -7,7 +7,7 @@ use generated_code::{Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, MergeableLoadSize};
-use crate::ir::LibCall;
+use crate::ir::{JumpTable, LibCall};
 use crate::isa::x64::lower::emit_vm_call;
 use crate::isa::x64::X64Backend;
 use crate::{
@@ -40,6 +40,7 @@ type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
 type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type VecArgPair = Vec<ArgPair>;
 type BoxSyntheticAmode = Box<SyntheticAmode>;
+type VecMachLabel = Vec<MachLabel>;
 
 pub struct SinkableLoad {
     inst: Inst,
@@ -64,7 +65,7 @@ pub(crate) fn lower_branch(
     backend: &X64Backend,
     branch: Inst,
     targets: &[MachLabel],
-) -> Option<()> {
+) -> Option<Vec<InstOutput>> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
     let mut isle_ctx = IsleContext { lower_ctx, backend };
@@ -74,6 +75,16 @@ pub(crate) fn lower_branch(
 impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(X64CallSite);
+
+    fn targets_count(&mut self, elements: &MachLabelSlice) -> u32 {
+        elements.len() as u32
+    }
+
+    fn landingpads(&mut self, jump_table: JumpTable) -> VecBlockCall {
+        self.lower_ctx.dfg().jump_tables[jump_table]
+            .as_slice()
+            .to_vec()
+    }
 
     #[inline]
     fn operand_size_of_type_32_64(&mut self, ty: Type) -> OperandSize {

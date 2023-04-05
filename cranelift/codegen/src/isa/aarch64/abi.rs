@@ -148,8 +148,16 @@ impl ABIMachineSpec for AArch64MachineDeps {
         // number of register values returned in the other class. That is,
         // we can return values in up to 8 integer and
         // 8 vector registers at once.
-        let max_per_class_reg_vals = 8; // x0-x7 and v0-v7
-        let mut remaining_reg_vals = 16;
+        let max_per_class_reg_vals = if args_or_rets == ArgsOrRets::LandingpadArgs {
+            2
+        } else {
+            8
+        }; // x0-x7 and v0-v7
+        let mut remaining_reg_vals = if args_or_rets == ArgsOrRets::LandingpadArgs {
+            2
+        } else {
+            16
+        };
 
         let ret_area_ptr = if add_ret_area_ptr {
             debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
@@ -1081,6 +1089,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 caller_conv: call_conv,
                 callee_conv: call_conv,
                 callee_pop_size: 0,
+                id: None,
+                alternate_targets: smallvec![],
             }),
         });
         insts
@@ -1279,6 +1289,8 @@ impl AArch64CallSite {
                     uses,
                     key,
                     new_stack_arg_size,
+                    id: None,
+                    alternate_targets: smallvec![],
                 });
                 ctx.emit(Inst::ReturnCall { info });
             }
@@ -1294,6 +1306,8 @@ impl AArch64CallSite {
                     uses,
                     key,
                     new_stack_arg_size,
+                    id: None,
+                    alternate_targets: smallvec![],
                 });
                 ctx.emit(Inst::ReturnCallInd { info });
             }
@@ -1303,6 +1317,8 @@ impl AArch64CallSite {
                     uses,
                     key,
                     new_stack_arg_size,
+                    id: None,
+                    alternate_targets: smallvec![],
                 });
                 ctx.emit(Inst::ReturnCallInd { info });
             }
