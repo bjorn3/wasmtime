@@ -31,7 +31,9 @@ impl JumpTableData {
     /// Create a new jump table with the provided blocks.
     pub fn new(default: BlockCall, table: &[BlockCall]) -> Self {
         Self {
-            table: std::iter::once(default).chain(table.iter().copied()).collect(),
+            table: std::iter::once(default)
+                .chain(table.iter().copied())
+                .collect(),
         }
     }
 

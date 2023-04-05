@@ -61,7 +61,7 @@ pub(crate) fn lower_branch(
     backend: &X64Backend,
     branch: Inst,
     targets: &[MachLabel],
-) -> Option<()> {
+) -> Option<Vec<InstOutput>> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
     let mut isle_ctx = IsleContext { lower_ctx, backend };
@@ -126,6 +126,16 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         call_site.emit_return_call(self.lower_ctx, args);
 
         InstOutput::new()
+    }
+
+    fn targets_count(&mut self, elements: &MachLabelSlice) -> u32 {
+        elements.len() as u32
+    }
+
+    fn landingpads(&mut self, jump_table: JumpTable) -> VecBlockCall {
+        self.lower_ctx.dfg().jump_tables[jump_table]
+            .as_slice()
+            .to_vec()
     }
 
     #[inline]

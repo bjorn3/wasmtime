@@ -3095,12 +3095,15 @@ impl<'a> Parser<'a> {
                 let default_args = self.parse_opt_value_list()?;
                 let destination = ctx.function.dfg.block_call(block_num, &default_args);
                 self.match_token(Token::Comma, "expected ',' between operands")?;
+                let imm = self.match_imm64("expected immediate")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let table = self.parse_jump_table(ctx, destination)?;
 
                 InstructionData::Invoke {
                     opcode,
                     func_ref,
                     args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
+                    imm,
                     table,
                 }
             }
@@ -3118,12 +3121,15 @@ impl<'a> Parser<'a> {
                 let default_args = self.parse_opt_value_list()?;
                 let destination = ctx.function.dfg.block_call(block_num, &default_args);
                 self.match_token(Token::Comma, "expected ',' between operands")?;
+                let imm = self.match_imm64("expected immediate")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let table = self.parse_jump_table(ctx, destination)?;
 
                 InstructionData::InvokeIndirect {
                     opcode,
                     sig_ref,
                     args: args.into_value_list(&[callee], &mut ctx.function.dfg.value_lists),
+                    imm,
                     table,
                 }
             }

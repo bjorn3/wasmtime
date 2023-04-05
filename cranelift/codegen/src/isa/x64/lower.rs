@@ -14,6 +14,7 @@ use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
+use alloc::vec::Vec;
 use smallvec::{smallvec, SmallVec};
 use target_lexicon::Triple;
 
@@ -317,7 +318,7 @@ impl LowerBackend for X64Backend {
         ctx: &mut Lower<Inst>,
         ir_inst: IRInst,
         targets: &[MachLabel],
-    ) -> Option<()> {
+    ) -> Option<Vec<InstOutput>> {
         isle::lower_branch(ctx, self, ir_inst, targets)
     }
 
