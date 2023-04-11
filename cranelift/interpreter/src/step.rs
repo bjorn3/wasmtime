@@ -431,15 +431,15 @@ where
             let curr_func = state.get_current_function();
             let table = &curr_func.dfg.jump_tables[table];
 
-            let args = args()?;
-            let addr_dv = DataValue::U64(arg(0)?.into_int()? as u64);
+            let args = args();
+            let addr_dv = DataValue::U64(arg(0).into_int()? as u64);
             let addr = Address::try_from(addr_dv.clone()).map_err(StepError::MemoryError)?;
 
             let func = state
                 .get_function_from_address(addr)
                 .ok_or_else(|| StepError::MemoryError(MemoryError::InvalidAddress(addr_dv)))?;
 
-            let call_args: SmallVec<[V; 1]> = SmallVec::from(&args[1..]);
+            let call_args: SmallVec<[DataValue; 1]> = SmallVec::from(&args[1..]);
 
             let signature = func.signature();
 
