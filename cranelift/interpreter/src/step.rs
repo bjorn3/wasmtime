@@ -432,7 +432,7 @@ where
             let table = &curr_func.dfg.jump_tables[table];
 
             let args = args();
-            let addr_dv = DataValue::U64(arg(0).into_int()? as u64);
+            let addr_dv = DataValue::I64(arg(0).into_int_unsigned()? as i64);
             let addr = Address::try_from(addr_dv.clone()).map_err(StepError::MemoryError)?;
 
             let func = state
