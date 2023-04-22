@@ -695,6 +695,9 @@
 (decl two_targets (MachLabel MachLabel) MachLabelSlice)
 (extern extractor two_targets two_targets)
 
+(decl targets_count (MachLabelSlice) u32)
+(extern constructor targets_count targets_count)
+
 ;; Extract the default target and jump table from a MachLabelSlice.
 (decl jump_table_targets (MachLabel BoxVecMachLabel) MachLabelSlice)
 (extern extractor jump_table_targets jump_table_targets)
@@ -1873,10 +1876,10 @@
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
 
-(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice VecMachLabel) Unit)
+(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice VecMachLabel) VecInstOutput)
 (extern constructor gen_invoke gen_invoke)
 
-(decl gen_invoke_indirect (SigRef Value ValueSlice VecMachLabel) Unit)
+(decl gen_invoke_indirect (SigRef Value ValueSlice VecMachLabel) VecInstOutput)
 (extern constructor gen_invoke_indirect gen_invoke_indirect)
 
 ;;;; Helpers for Emitting Loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

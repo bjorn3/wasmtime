@@ -177,6 +177,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         }
     }
 
+    fn targets_count(&mut self, elements: &VecMachLabel) -> u32 {
+        elements.len() as u32
+    }
+
     fn vec_label_get(&mut self, val: &VecMachLabel, x: u8) -> MachLabel {
         val[x as usize]
     }
@@ -511,7 +515,7 @@ pub(crate) fn lower_branch(
     backend: &Riscv64Backend,
     branch: Inst,
     targets: &[MachLabel],
-) -> Option<()> {
+) -> Option<Vec<InstOutput>> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
     let mut isle_ctx = RV64IsleContext::new(lower_ctx, backend);

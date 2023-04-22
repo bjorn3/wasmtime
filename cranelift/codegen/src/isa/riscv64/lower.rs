@@ -4,6 +4,7 @@ use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::Riscv64Backend;
 use crate::machinst::lower::*;
 use crate::machinst::*;
+use alloc::vec::Vec;
 pub mod isle;
 
 //=============================================================================
@@ -21,7 +22,7 @@ impl LowerBackend for Riscv64Backend {
         ctx: &mut Lower<Inst>,
         ir_inst: IRInst,
         targets: &[MachLabel],
-    ) -> Option<()> {
+    ) -> Option<Vec<InstOutput>> {
         isle::lower_branch(ctx, self, ir_inst, targets)
     }
 

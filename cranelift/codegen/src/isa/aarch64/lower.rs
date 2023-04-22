@@ -16,6 +16,7 @@ use crate::isa::aarch64::AArch64Backend;
 use crate::machinst::lower::*;
 use crate::machinst::{Reg, Writable};
 use crate::{machinst::*, trace};
+use alloc::vec::Vec;
 use smallvec::{smallvec, SmallVec};
 
 pub mod isle;
@@ -692,7 +693,7 @@ impl LowerBackend for AArch64Backend {
         ctx: &mut Lower<Inst>,
         ir_inst: IRInst,
         targets: &[MachLabel],
-    ) -> Option<()> {
+    ) -> Option<Vec<InstOutput>> {
         isle::lower_branch(ctx, self, ir_inst, targets)
     }
 

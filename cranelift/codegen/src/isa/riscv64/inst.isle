@@ -705,6 +705,9 @@
 (type AMO (primitive AMO))
 (type VecMachLabel extern (enum))
 
+(decl targets_count (VecMachLabel) u32)
+(extern constructor targets_count targets_count)
+
 ;; Converters
 
 (convert u8 i32 u8_as_i32)
@@ -2321,9 +2324,10 @@
 (decl vec_label_get (VecMachLabel u8) MachLabel )
 (extern constructor vec_label_get vec_label_get)
 
-(decl partial lower_branch (Inst VecMachLabel) Unit)
+(decl partial lower_branch (Inst VecMachLabel) VecInstOutput)
 (rule (lower_branch (jump _) targets )
-      (emit_side_effect (SideEffectNoResult.Inst (gen_jump (vec_label_get targets 0)))))
+      (let ((_ Unit (emit_side_effect (SideEffectNoResult.Inst (gen_jump (vec_label_get targets 0))))))
+        (output_none_vec (targets_count targets))))
 
 ;;; cc a b targets Type
 (decl lower_br_icmp (IntCC ValueRegs ValueRegs VecMachLabel Type) Unit)
@@ -2371,34 +2375,39 @@
 ;; Default behavior for branching based on an input value.
 (rule
   (lower_branch (brif v @ (value_type ty) _ _) targets)
-  (lower_cond_br (IntCC.NotEqual) (normalize_cmp_value ty v (ExtendOp.Zero)) targets ty))
+  (let ((_ Unit (lower_cond_br (IntCC.NotEqual) (normalize_cmp_value ty v (ExtendOp.Zero)) targets ty)))
+    (output_none_vec (targets_count targets))))
 
 ;; Special case for SI128 to reify the comparison value and branch on it.
 (rule 2
   (lower_branch (brif v @ (value_type $I128) _ _) targets)
   (let ((zero ValueRegs (value_regs (zero_reg) (zero_reg)))
-        (cmp Reg (gen_icmp (IntCC.NotEqual) v zero $I128)))
-    (lower_cond_br (IntCC.NotEqual) cmp targets $I64)))
+        (cmp Reg (gen_icmp (IntCC.NotEqual) v zero $I128))
+        (_ Unit (lower_cond_br (IntCC.NotEqual) cmp targets $I64)))
+    (output_none_vec (targets_count targets))))
 
 ;; Branching on the result of an icmp
 (rule 1
   (lower_branch (brif (maybe_uextend (icmp cc a @ (value_type ty) b)) _ _) targets)
-  (lower_br_icmp cc a b targets ty))
+  (let ((_ Unit (lower_br_icmp cc a b targets ty)))
+    (output_none_vec (targets_count targets))))
 
 ;; Branching on the result of an fcmp
 (rule 1
   (lower_branch (brif (maybe_uextend (fcmp cc a @ (value_type ty) b)) _ _) targets)
   (if-let $true (floatcc_unordered cc))
   (let ((then BranchTarget (label_to_br_target (vec_label_get targets 0)))
-        (else BranchTarget (label_to_br_target (vec_label_get targets 1))))
-    (emit_side_effect (cond_br (emit_fcmp (floatcc_inverse cc) ty a b) else then))))
+        (else BranchTarget (label_to_br_target (vec_label_get targets 1)))
+        (_ Unit (emit_side_effect (cond_br (emit_fcmp (floatcc_inverse cc) ty a b) else then))))
+    (output_none_vec (targets_count targets))))
 
 (rule 1
   (lower_branch (brif (maybe_uextend (fcmp cc a @ (value_type ty) b)) _ _) targets)
   (if-let $false (floatcc_unordered cc))
   (let ((then BranchTarget (label_to_br_target (vec_label_get targets 0)))
-        (else BranchTarget (label_to_br_target (vec_label_get targets 1))))
-    (emit_side_effect (cond_br (emit_fcmp cc ty a b) then else))))
+        (else BranchTarget (label_to_br_target (vec_label_get targets 1)))
+        (_ Unit (emit_side_effect (cond_br (emit_fcmp cc ty a b) then else))))
+    (output_none_vec (targets_count targets))))
 
 ;;;
 (decl lower_br_table (Reg VecMachLabel) Unit)
@@ -2406,7 +2415,8 @@
 
 (rule
   (lower_branch (br_table index _) targets)
-  (lower_br_table index targets))
+  (let ((_ Unit (lower_br_table index targets)))
+    (output_none_vec (targets_count targets))))
 
 
 ;;;; Rules for invokes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2527,10 +2537,10 @@
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
 
-(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice VecMachLabel) Unit)
+(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice VecMachLabel) VecInstOutput)
 (extern constructor gen_invoke gen_invoke)
 
-(decl gen_invoke_indirect (SigRef Value ValueSlice VecMachLabel) Unit)
+(decl gen_invoke_indirect (SigRef Value ValueSlice VecMachLabel) VecInstOutput)
 (extern constructor gen_invoke_indirect gen_invoke_indirect)
 
 ;;; this is trying to imitate aarch64 `madd` instruction.

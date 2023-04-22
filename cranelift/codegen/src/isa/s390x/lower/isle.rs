@@ -71,7 +71,7 @@ pub(crate) fn lower_branch(
     backend: &S390xBackend,
     branch: Inst,
     targets: &[MachLabel],
-) -> Option<()> {
+) -> Option<Vec<InstOutput>> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
     let mut isle_ctx = IsleContext { lower_ctx, backend };
@@ -84,6 +84,10 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn args_builder_new(&mut self) -> CallArgListBuilder {
         Cell::new(CallArgList::new())
+    }
+
+    fn targets_count(&mut self, elements: &VecMachLabel) -> u32 {
+        elements.len() as u32
     }
 
     #[inline]
