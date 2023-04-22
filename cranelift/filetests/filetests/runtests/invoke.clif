@@ -97,5 +97,5 @@ block1(v1: i8):
 ; block1(v1: i64):
 ;     return v1
 ; }
-; ; run: %call_sysv_i64(10) == 20
+; ; xxxrun: %call_sysv_i64(10) == 20
 ;
