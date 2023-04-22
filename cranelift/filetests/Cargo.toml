@@ -18,7 +18,7 @@ cranelift-reader = { workspace = true }
 cranelift-jit = { workspace = true, features = ["selinux-fix"] }
 cranelift-module = { workspace = true }
 cranelift-control = { workspace = true }
-file-per-thread-logger = "0.1.2"
+env_logger = { workspace = true }
 filecheck = "0.5.0"
 gimli = { workspace = true }
 log = { workspace = true }

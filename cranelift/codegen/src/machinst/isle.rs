@@ -751,7 +751,13 @@ macro_rules! isle_prelude_caller_methods {
                 sig.params.len()
             );
 
-            crate::machinst::isle::gen_invoke_common(&mut self.lower_ctx, num_rets, caller, args, targets)
+            crate::machinst::isle::gen_invoke_common(
+                &mut self.lower_ctx,
+                num_rets,
+                caller,
+                args,
+                targets,
+            )
         }
 
         fn gen_invoke_indirect(
@@ -779,7 +785,13 @@ macro_rules! isle_prelude_caller_methods {
                 sig.params.len()
             );
 
-            crate::machinst::isle::gen_invoke_common(&mut self.lower_ctx, num_rets, caller, args, targets)
+            crate::machinst::isle::gen_invoke_common(
+                &mut self.lower_ctx,
+                num_rets,
+                caller,
+                args,
+                targets,
+            )
         }
     };
 }
@@ -834,7 +846,6 @@ pub fn gen_call_common<M: ABIMachineSpec>(
     caller.emit_stack_post_adjust(ctx);
 
     outputs
-
 }
 
 pub fn gen_invoke_common<M: ABIMachineSpec>(
@@ -887,7 +898,8 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
 
     caller.emit_stack_post_adjust(ctx);
 
-    // FIXME add jump to default target
+    // FIXME move jump to default target from backends to here
+    // FIXME all backends except aarch64 miss this jump
 
     let mut ret_val = vec![outputs];
     for _ in 1..targets.len() {

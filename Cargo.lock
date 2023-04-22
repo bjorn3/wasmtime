@@ -663,7 +663,7 @@ dependencies = [
  "cranelift-native",
  "cranelift-reader",
  "cranelift-wasm",
- "file-per-thread-logger",
+ "env_logger 0.10.0",
  "filecheck",
  "gimli",
  "log",

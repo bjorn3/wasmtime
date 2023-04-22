@@ -6,7 +6,6 @@
 use crate::runone;
 use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;
 use cranelift_codegen::timing;
-use file_per_thread_logger;
 use log::error;
 use num_cpus;
 use std::panic::catch_unwind;
@@ -120,7 +119,7 @@ fn heartbeat_thread(replies: Sender<Reply>) -> thread::JoinHandle<()> {
     thread::Builder::new()
         .name("heartbeat".to_string())
         .spawn(move || {
-            file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
+            let _ = env_logger::try_init();
             while replies.send(Reply::Tick).is_ok() {
                 thread::sleep(Duration::from_secs(1));
             }
@@ -137,7 +136,7 @@ fn worker_thread(
     thread::Builder::new()
         .name(format!("worker #{}", thread_num))
         .spawn(move || {
-            file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
+            let _ = env_logger::try_init();
             loop {
                 // Lock the mutex only long enough to extract a request.
                 let Request(jobid, path) = match requests.lock().unwrap().recv() {
