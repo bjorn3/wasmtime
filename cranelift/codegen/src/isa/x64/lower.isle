@@ -3069,6 +3069,14 @@
               (cmove ty (CC.B) idx_reg size_reg))))
       (emit_side_effect (jmp_table_seq ty clamped_idx default_target jt_targets))))
 
+;;;; Rules for invokes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;(rule (lower_branch (invoke (func_ref_data sig_ref extname dist) inputs _) targets)
+;      (gen_invoke sig_ref extname dist inputs targets))
+
+;(rule (lower_branch (invoke_indirect sig_ref val inputs _) targets)
+;      (gen_invoke_indirect sig_ref val inputs targets))
+
 ;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (select_spectre_guard (icmp cc a b) x y))
