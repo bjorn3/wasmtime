@@ -41,6 +41,7 @@ use std::boxed::Box;
 use std::convert::TryFrom;
 
 type BoxCallInfo = Box<CallInfo>;
+type VecMachLabel = Vec<MachLabel>;
 type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;
 type MachLabelSlice = [MachLabel];
 type VecArgPair = Vec<ArgPair>;

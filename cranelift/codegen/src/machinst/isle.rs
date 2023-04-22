@@ -719,15 +719,14 @@ macro_rules! isle_prelude_caller_methods {
             crate::machinst::isle::gen_call_common(&mut self.lower_ctx, num_rets, caller, args)
         }
 
-        /*
         fn gen_invoke(
             &mut self,
             sig_ref: SigRef,
             extname: ExternalName,
             dist: RelocDistance,
             args @ (inputs, off): ValueSlice,
-            jump_table: JumpTable,
-        ) -> SideEffectNoResult {
+            targets: &VecMachLabel,
+        ) {
             todo!();
         }
 
@@ -736,11 +735,10 @@ macro_rules! isle_prelude_caller_methods {
             sig_ref: SigRef,
             val: Value,
             args @ (inputs, off): ValueSlice,
-            jump_table: JumpTable,
-        ) -> SideEffectNoResult {
+            targets: &VecMachLabel,
+        ) {
             todo!();
         }
-        */
     };
 }
 
