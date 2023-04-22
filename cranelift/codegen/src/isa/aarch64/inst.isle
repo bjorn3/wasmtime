@@ -1687,6 +1687,9 @@
 (decl branch_target (VecMachLabel u8) BranchTarget)
 (extern constructor branch_target branch_target)
 
+(decl targets_count (VecMachLabel) u32)
+(extern constructor targets_count targets_count)
+
 (decl targets_jt_size (VecMachLabel) u32)
 (extern constructor targets_jt_size targets_jt_size)
 
@@ -3521,10 +3524,10 @@
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
 
-(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice VecMachLabel) Unit)
+(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice VecMachLabel) VecInstOutput)
 (extern constructor gen_invoke gen_invoke)
 
-(decl gen_invoke_indirect (SigRef Value ValueSlice VecMachLabel) Unit)
+(decl gen_invoke_indirect (SigRef Value ValueSlice VecMachLabel) VecInstOutput)
 (extern constructor gen_invoke_indirect gen_invoke_indirect)
 
 ;; Helpers for pinned register manipulation.

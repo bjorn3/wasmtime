@@ -137,7 +137,7 @@ pub trait LowerBackend {
         ctx: &mut Lower<Self::MInst>,
         inst: Inst,
         targets: &[MachLabel],
-    ) -> Option<()>;
+    ) -> Option<Vec<InstOutput>>;
 
     /// A bit of a hack: give a fixed register that always holds the result of a
     /// `get_pinned_reg` instruction, if known.  This allows elision of moves
@@ -909,7 +909,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.cur_inst = Some(branch);
 
         // Lower the branch in ISLE.
-        backend
+        let inst_ret_args = backend
             .lower_branch(self, branch, targets)
             .unwrap_or_else(|| {
                 panic!(
@@ -920,16 +920,18 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let loc = self.srcloc(branch);
         self.finish_ir_inst(loc);
         // Add block param outputs for current block.
-        self.lower_branch_blockparam_args(bindex);
+        self.lower_branch_blockparam_args(bindex, inst_ret_args);
         Ok(())
     }
 
-    fn lower_branch_blockparam_args(&mut self, block: BlockIndex) {
-        // FIXME update this function for invoke/invoke_indirect to add the return values and
-        // exception values as necessary
+    fn lower_branch_blockparam_args(&mut self, block: BlockIndex, inst_ret_args: Vec<InstOutput>) {
+        assert_eq!(
+            self.vcode.block_order().succ_indices(block).1.len(),
+            inst_ret_args.len()
+        );
 
         // TODO: why not make `block_order` public?
-        for succ_idx in 0..self.vcode.block_order().succ_indices(block).1.len() {
+        for (succ_idx, args) in inst_ret_args.into_iter().enumerate() {
             // Avoid immutable borrow by explicitly indexing.
             let (opt_inst, succs) = self.vcode.block_order().succ_indices(block);
             let inst = opt_inst.expect("lower_branch_blockparam_args called on a critical edge!");
@@ -940,13 +942,21 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // `branch_destination`. If that assumption is violated, the branch targets returned
             // here will not match the clif.
             let branches = self.f.dfg.insts[inst].branch_destination(&self.f.dfg.jump_tables);
-            let branch_args = branches[succ_idx].args_slice(&self.f.dfg.value_lists);
+            let branch_args = args.into_iter().chain(
+                // FIXME maybe push back BlockCall handling to the backend specific lower_branch
+                // method too?
+                branches[succ_idx]
+                    .args_slice(&self.f.dfg.value_lists)
+                    .iter()
+                    .map(|&arg| {
+                        let arg = self.f.dfg.resolve_aliases(arg);
+                        self.put_value_in_regs(arg)
+                    }),
+            ).collect::<Vec<_>>();
 
             let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
-            for &arg in branch_args {
-                let arg = self.f.dfg.resolve_aliases(arg);
-                let regs = self.put_value_in_regs(arg);
-                for &vreg in regs.regs() {
+            for arg in branch_args {
+                for &vreg in arg.regs() {
                     let vreg = self.vcode.resolve_vreg_alias(vreg.into());
                     branch_arg_vregs.push(vreg.into());
                 }

@@ -62,7 +62,7 @@ pub(crate) fn lower_branch(
     backend: &AArch64Backend,
     branch: Inst,
     targets: &[MachLabel],
-) -> Option<()> {
+) -> Option<Vec<InstOutput>> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
     let mut isle_ctx = IsleContext { lower_ctx, backend };
@@ -547,6 +547,10 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
     fn branch_target(&mut self, elements: &VecMachLabel, idx: u8) -> BranchTarget {
         BranchTarget::Label(elements[idx as usize])
+    }
+
+    fn targets_count(&mut self, elements: &VecMachLabel) -> u32 {
+        elements.len() as u32
     }
 
     fn targets_jt_size(&mut self, elements: &VecMachLabel) -> u32 {

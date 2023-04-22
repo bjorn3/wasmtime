@@ -2718,6 +2718,8 @@
 (rule (jt_sequence ridx targets)
       (SideEffectNoResult.Inst (MInst.JTSequence ridx targets)))
 
+(decl targets_count (VecMachLabel) u32)
+(extern constructor targets_count targets_count)
 
 ;; Helpers for instruction sequences ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

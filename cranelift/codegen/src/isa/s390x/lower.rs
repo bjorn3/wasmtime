@@ -4,6 +4,7 @@ use crate::ir::Inst as IRInst;
 use crate::isa::s390x::inst::Inst;
 use crate::isa::s390x::S390xBackend;
 use crate::machinst::{InstOutput, Lower, LowerBackend, MachLabel};
+use alloc::vec::Vec;
 
 pub mod isle;
 
@@ -22,7 +23,7 @@ impl LowerBackend for S390xBackend {
         ctx: &mut Lower<Inst>,
         ir_inst: IRInst,
         targets: &[MachLabel],
-    ) -> Option<()> {
+    ) -> Option<Vec<InstOutput>> {
         isle::lower_branch(ctx, self, ir_inst, targets)
     }
 }
