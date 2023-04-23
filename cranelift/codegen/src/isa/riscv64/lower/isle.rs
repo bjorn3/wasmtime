@@ -94,6 +94,12 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICaller);
 
+    fn landingpads(&mut self, jump_table: JumpTable) -> VecBlockCall {
+        self.lower_ctx.dfg().jump_tables[jump_table]
+            .as_slice()
+            .to_vec()
+    }
+
     fn vec_writable_to_regs(&mut self, val: &VecWritableReg) -> ValueRegs {
         match val.len() {
             1 => ValueRegs::one(val[0].to_reg()),

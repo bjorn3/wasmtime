@@ -594,6 +594,8 @@ impl<'a> Verifier<'a> {
                 self.verify_sig_ref(inst, sig_ref, errors)?;
                 self.verify_value_list(inst, args, errors)?;
             }
+            // FIXME check signature of landingpads to only allow pointer sized values up to an
+            // architecture specific amount
             Invoke {
                 func_ref,
                 ref args,

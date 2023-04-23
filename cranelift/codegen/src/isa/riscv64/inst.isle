@@ -2421,11 +2421,11 @@
 
 ;;;; Rules for invokes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower_branch (invoke (func_ref_data sig_ref extname dist) inputs _) targets)
-      (gen_invoke sig_ref extname dist inputs targets))
+(rule (lower_branch (invoke (func_ref_data sig_ref extname dist) inputs jump_table) targets)
+      (gen_invoke sig_ref extname dist inputs (landingpads jump_table) targets))
 
-(rule (lower_branch (invoke_indirect sig_ref val inputs _) targets)
-      (gen_invoke_indirect sig_ref val inputs targets))
+(rule (lower_branch (invoke_indirect sig_ref val inputs jump_table) targets)
+      (gen_invoke_indirect sig_ref val inputs (landingpads jump_table) targets))
 
 
 (decl load_ra () Reg)
@@ -2537,10 +2537,10 @@
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
 
-(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice VecMachLabel) VecInstOutput)
+(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice VecBlockCall VecMachLabel) VecInstOutput)
 (extern constructor gen_invoke gen_invoke)
 
-(decl gen_invoke_indirect (SigRef Value ValueSlice VecMachLabel) VecInstOutput)
+(decl gen_invoke_indirect (SigRef Value ValueSlice VecBlockCall VecMachLabel) VecInstOutput)
 (extern constructor gen_invoke_indirect gen_invoke_indirect)
 
 ;;; this is trying to imitate aarch64 `madd` instruction.
