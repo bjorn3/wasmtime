@@ -165,6 +165,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         ArgsOrRets::Rets => {
                             get_intreg_for_retval(&call_conv, next_gpr, next_param_idx)
                         }
+                        ArgsOrRets::LandingpadArgs => todo!(),
                     }
                 } else {
                     match args_or_rets {
@@ -174,6 +175,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         ArgsOrRets::Rets => {
                             get_fltreg_for_retval(&call_conv, next_vreg, next_param_idx)
                         }
+                        ArgsOrRets::LandingpadArgs => todo!(),
                     }
                 };
                 next_param_idx += 1;

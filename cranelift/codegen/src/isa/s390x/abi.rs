@@ -258,18 +258,21 @@ impl ABIMachineSpec for S390xMachineDeps {
                 let candidate = match args_or_rets {
                     ArgsOrRets::Args => get_intreg_for_arg(next_gpr),
                     ArgsOrRets::Rets => get_intreg_for_ret(next_gpr),
+                    ArgsOrRets::LandingpadArgs => todo!(),
                 };
                 (&mut next_gpr, candidate, None)
             } else if fltreg {
                 let candidate = match args_or_rets {
                     ArgsOrRets::Args => get_fltreg_for_arg(next_fpr),
                     ArgsOrRets::Rets => get_fltreg_for_ret(next_fpr),
+                    ArgsOrRets::LandingpadArgs => todo!(),
                 };
                 (&mut next_fpr, candidate, None)
             } else if vecreg {
                 let candidate = match args_or_rets {
                     ArgsOrRets::Args => get_vecreg_for_arg(next_vr),
                     ArgsOrRets::Rets => get_vecreg_for_ret(next_vr),
+                    ArgsOrRets::LandingpadArgs => todo!(),
                 };
                 (&mut next_vr, candidate, None)
             } else if call_conv.extends_wasmtime() {
