@@ -67,6 +67,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
+        assert!(args_or_rets != ArgsOrRets::LandingpadArgs);
         // All registers that can be used as parameters or rets.
         // both start and end are included.
         let (x_start, x_end, f_start, f_end) = if args_or_rets == ArgsOrRets::Args {
