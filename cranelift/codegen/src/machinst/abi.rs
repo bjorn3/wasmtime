@@ -2313,6 +2313,43 @@ impl<M: ABIMachineSpec> Caller<M> {
         (insts, value_regs)
     }
 
+    /// Define a landingpad argument value after the call returns.
+    pub fn gen_landingpad_argval(
+        &mut self,
+        ctx: &Lower<M::I>,
+        idx: usize,
+    ) -> ValueRegs<Reg> {
+        todo!();
+        /*
+        match &ctx.sigs().landingpad_args(self.sig)[idx] {
+            &ABIArg::Slots { ref slots, .. } => {
+                assert_eq!(into_regs.len(), slots.len());
+                for (slot, into_reg) in slots.iter().zip(into_regs.regs().iter()) {
+                    match slot {
+                        // Extension mode doesn't matter because we're copying out, not in,
+                        // and we ignore high bits in our own registers by convention.
+                        &ABIArgSlot::Reg { reg, .. } => {
+                            self.defs.push(CallRetPair {
+                                vreg: *into_reg,
+                                preg: reg.into(),
+                            });
+                        }
+                        &ABIArgSlot::Stack { offset, ty, .. } => {
+                            panic!("ABIArgSlot::Stack not supported in landingpad position");
+                        }
+                    }
+                }
+            }
+            &ABIArg::StructArg { .. } => {
+                panic!("StructArg not supported in landingpad position");
+            }
+            &ABIArg::ImplicitPtrArg { .. } => {
+                panic!("ImplicitPtrArg not supported in landingpad position");
+            }
+        }
+        */
+    }
+
     /// Emit the call itself.
     ///
     /// The returned instruction should have proper use- and def-sets according

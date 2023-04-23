@@ -797,6 +797,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 let vreg = reg.to_virtual_reg().unwrap();
                 self.vregs.set_vreg_type(vreg, rty);
                 self.vcode.add_block_param(vreg);
+                log::info!("{block:?}: block param {vreg:?}");
             }
         }
         Ok(())
@@ -961,6 +962,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     branch_arg_vregs.push(vreg.into());
                 }
             }
+            log::info!("{block:?} -> {succ:?}({branch_arg_vregs:?})");
             self.vcode.add_succ(succ, &branch_arg_vregs[..]);
         }
         self.finish_ir_inst(Default::default());

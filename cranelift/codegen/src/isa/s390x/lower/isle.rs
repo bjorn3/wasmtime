@@ -81,6 +81,12 @@ pub(crate) fn lower_branch(
 impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     isle_lower_prelude_methods!();
 
+    fn landingpads(&mut self, jump_table: JumpTable) -> VecBlockCall {
+        self.lower_ctx.dfg().jump_tables[jump_table]
+            .as_slice()
+            .to_vec()
+    }
+
     #[inline]
     fn args_builder_new(&mut self) -> CallArgListBuilder {
         Cell::new(CallArgList::new())

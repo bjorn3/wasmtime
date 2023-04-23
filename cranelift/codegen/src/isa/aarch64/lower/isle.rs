@@ -78,6 +78,12 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(crate::isa::aarch64::abi::AArch64MachineDeps, AArch64Caller);
 
+    fn landingpads(&mut self, jump_table: JumpTable) -> VecBlockCall {
+        self.lower_ctx.dfg().jump_tables[jump_table]
+            .as_slice()
+            .to_vec()
+    }
+
     fn sign_return_address_disabled(&mut self) -> Option<()> {
         if self.backend.isa_flags.sign_return_address() {
             None

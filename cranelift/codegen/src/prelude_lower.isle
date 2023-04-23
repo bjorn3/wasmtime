@@ -190,6 +190,11 @@
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(type VecBlockCall extern (enum))
+
+(decl landingpads (JumpTable) VecBlockCall)
+(extern constructor landingpads landingpads)
+
 ;; Extractor to get a `ValueSlice` out of a `ValueList`.
 (decl value_list_slice (ValueSlice) ValueList)
 (extern extractor infallible value_list_slice value_list_slice)

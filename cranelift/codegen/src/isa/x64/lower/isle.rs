@@ -80,6 +80,12 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(X64ABIMachineSpec, X64Caller);
 
+    fn landingpads(&mut self, jump_table: JumpTable) -> VecBlockCall {
+        self.lower_ctx.dfg().jump_tables[jump_table]
+            .as_slice()
+            .to_vec()
+    }
+
     #[inline]
     fn operand_size_of_type_32_64(&mut self, ty: Type) -> OperandSize {
         if ty.bits() == 64 {

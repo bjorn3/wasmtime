@@ -7,14 +7,15 @@ use std::cell::Cell;
 pub use super::MachLabel;
 use super::RetPair;
 pub use crate::ir::{
-    condcodes, condcodes::CondCode, dynamic_to_fixed, ArgumentExtension, ArgumentPurpose, Constant,
-    DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
+    condcodes, condcodes::CondCode, dynamic_to_fixed, types, ArgumentExtension, ArgumentPurpose,
+    Constant, DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate, JumpTable, SigRef,
+    StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
 pub use crate::isa::TargetIsa;
 pub use crate::machinst::{
-    ABIArg, ABIArgSlot, ABIMachineSpec, Caller, InputSourceInst, Lower, LowerBackend, RealReg, Reg,
-    RelocDistance, Sig, VCodeInst, Writable,
+    valueregs::InvalidSentinel, ABIArg, ABIArgSlot, ABIMachineSpec, Caller, InputSourceInst, Lower,
+    LowerBackend, RealReg, Reg, RelocDistance, Sig, VCodeInst, Writable,
 };
 pub use crate::settings::{OptLevel, TlsModel};
 
@@ -25,6 +26,7 @@ pub type ValueArray3 = [Value; 3];
 pub type BlockArray2 = [BlockCall; 2];
 pub type WritableReg = Writable<Reg>;
 pub type VecRetPair = Vec<RetPair>;
+pub type VecBlockCall = Vec<BlockCall>;
 pub type VecMask = Vec<u8>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
 pub type WritableValueRegs = crate::machinst::ValueRegs<WritableReg>;
@@ -731,6 +733,7 @@ macro_rules! isle_prelude_caller_methods {
             extname: ExternalName,
             dist: RelocDistance,
             args @ (inputs, off): ValueSlice,
+            landingpads: &VecBlockCall,
             targets: &VecMachLabel,
         ) -> VecInstOutput {
             let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
@@ -757,6 +760,7 @@ macro_rules! isle_prelude_caller_methods {
                 caller,
                 args,
                 targets,
+                landingpads,
             )
         }
 
@@ -765,6 +769,7 @@ macro_rules! isle_prelude_caller_methods {
             sig_ref: SigRef,
             val: Value,
             args @ (inputs, off): ValueSlice,
+            landingpads: &VecBlockCall,
             targets: &VecMachLabel,
         ) -> VecInstOutput {
             let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
@@ -791,6 +796,7 @@ macro_rules! isle_prelude_caller_methods {
                 caller,
                 args,
                 targets,
+                landingpads,
             )
         }
     };
@@ -854,6 +860,7 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
     mut caller: Caller<M>,
     (inputs, off): ValueSlice,
     targets: &[MachLabel],
+    landingpads: &VecBlockCall,
 ) -> VecInstOutput {
     caller.emit_stack_pre_adjust(ctx);
 
@@ -878,7 +885,10 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
     // Handle retvals prior to emitting call, so the
     // constraints are on the call instruction; but buffer the
     // instructions till after the call.
-    let mut outputs = InstOutput::new();
+    let mut outputs = vec![InstOutput::new()];
+    for _ in 1..targets.len() {
+        outputs.push(InstOutput::new());
+    }
     let mut retval_insts: crate::machinst::abi::SmallInstVec<_> = smallvec::smallvec![];
     // We take the *last* `num_rets` returns of the sig:
     // this skips a StructReturn, if any, that is present.
@@ -887,8 +897,44 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
     for i in (sigdata_num_rets - num_rets)..sigdata_num_rets {
         let (retval_inst, retval_regs) = caller.gen_retval(ctx, i);
         retval_insts.extend(retval_inst.into_iter());
-        outputs.push(retval_regs);
+        outputs[0].push(retval_regs);
     }
+
+    assert_eq!(landingpads.len(), targets.len() - 1);
+    log::info!("landingpads: {landingpads:?}");
+    let landingpad_arg_counts = landingpads
+        .iter()
+        .map(|landingpad| {
+            let landingpad_block = landingpad.block(&ctx.dfg().value_lists);
+            let landingpad_block_params = ctx.dfg().block_params(landingpad_block);
+            let landingpad_args = landingpad.args_slice(&ctx.dfg().value_lists);
+            let landingpad_arg_count = landingpad_block_params.len() - landingpad_args.len();
+
+            for param_idx in 0..landingpad_arg_count {
+                let param_ty = ctx.dfg().value_type(landingpad_block_params[param_idx]);
+                assert_eq!(param_ty, types::I64); // FIXME pointer type
+            }
+
+            landingpad_arg_count
+        })
+        .collect::<Vec<_>>();
+
+    let landingpad_argvals = (0..landingpad_arg_counts.iter().copied().max().unwrap_or(0))
+        .map(|i| caller.gen_landingpad_argval(ctx, i))
+        .collect::<Vec<_>>();
+
+    for (landingpad_idx, (landingpad, landingpad_arg_count)) in
+        landingpads.iter().zip(landingpad_arg_counts).enumerate()
+    {
+        let succ_idx = landingpad_idx + 1;
+        let landingpad_block = landingpad.block(&ctx.dfg().value_lists);
+        for param_idx in 0..landingpad_arg_count {
+            let arg = landingpad_argvals[param_idx];
+            log::info!("landingpad param {landingpad_block}: {arg:?}");
+            outputs[succ_idx].push(landingpad_argvals[param_idx]);
+        }
+    }
+    log::info!("{outputs:?}");
 
     caller.emit_call(ctx);
 
@@ -899,13 +945,11 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
     caller.emit_stack_post_adjust(ctx);
 
     // FIXME move jump to default target from backends to here
+    // FIXME merge the call and jump into a single instruction to prevent regalloc from
+    //       putting any moves for landingpads after the call.
     // FIXME all backends except aarch64 miss this jump
 
-    let mut ret_val = vec![outputs];
-    for _ in 1..targets.len() {
-        ret_val.push(smallvec::smallvec![]);
-    }
-    ret_val
+    outputs
 }
 
 /// This structure is used to implement the ISLE-generated `Context` trait and

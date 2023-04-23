@@ -14,6 +14,21 @@ block0(v0: i64):
     return v1
 }
 
+function %call_invoke2(i64) -> i64 {
+    fn0 = %callee_i64(i64) -> i64
+
+block0(v0: i64):
+    invoke fn0(v0), block1, [block2]
+
+block1(v1: i64):
+    return v1
+
+block2(v2: i64):
+    trap unreachable
+}
+; run: %call_invoke2(10) == 20
+
+
 function %call_i64(i64) -> i64 {
     fn0 = %callee_i64(i64) -> i64
 
@@ -78,7 +93,19 @@ block1(v1: i8):
 ; run: %call_i8(1) == 0
 ; run: %call_i8(0) == 1
 
+function %call_invoke(i64) -> i64 {
+    fn0 = %callee_i64(i64) -> i64
 
+block0(v0: i64):
+    invoke fn0(v0), block1, [block2]
+
+block1(v1: i64):
+    return v1
+
+block2:
+    trap unreachable
+}
+; run: %call_invoke(10) == 20
 
 ; Tests calling across different calling conventions
 
