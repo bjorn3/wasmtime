@@ -74,10 +74,6 @@ pub struct ExtendedValue {
     extend: ExtendOp,
 }
 
-impl IsleContext<'_, '_, MInst, AArch64Backend> {
-    isle_prelude_method_helpers!(AArch64Caller);
-}
-
 impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(crate::isa::aarch64::abi::AArch64MachineDeps, AArch64Caller);

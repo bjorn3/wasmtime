@@ -1044,8 +1044,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
-    isle_prelude_method_helpers!(X64Caller);
-
     fn load_xmm_unaligned(&mut self, addr: SyntheticAmode) -> Xmm {
         let tmp = self.lower_ctx.alloc_tmp(types::F32X4).only_reg().unwrap();
         self.lower_ctx.emit(MInst::XmmUnaryRmRUnaligned {
