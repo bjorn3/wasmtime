@@ -2111,6 +2111,11 @@ impl<M: ABIMachineSpec> Caller<M> {
         sigs.num_args(self.sig)
     }
 
+    /// Get the number of return values expected.
+    pub fn num_rets(&self, sigs: &SigSet) -> usize {
+        sigs.num_rets(self.sig)
+    }
+
     /// Emit code to pre-adjust the stack, prior to argument copies and call.
     pub fn emit_stack_pre_adjust(&self, ctx: &mut Lower<M::I>) {
         let off =
