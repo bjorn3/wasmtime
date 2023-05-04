@@ -141,7 +141,7 @@
 //! semantics below (grep for "Preserves execution semantics").
 
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
-use crate::ir::{ExternalName, Opcode, RelSourceLoc, SourceLoc, TrapCode};
+use crate::ir::{ExternalName, RelSourceLoc, SourceLoc, TrapCode};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::{
     BlockIndex, MachInstLabelUse, TextSectionBuilder, VCodeConstant, VCodeConstants, VCodeInst,
@@ -1436,14 +1436,9 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Add a call-site record at the current offset.
-    pub fn add_call_site(&mut self, opcode: Opcode) {
-        debug_assert!(
-            opcode.is_call(),
-            "adding call site info for a non-call instruction."
-        );
+    pub fn add_call_site(&mut self) {
         self.call_sites.push(MachCallSite {
             ret_addr: self.data.len() as CodeOffset,
-            opcode,
         });
     }
 
@@ -1630,8 +1625,6 @@ pub struct MachTrap {
 pub struct MachCallSite {
     /// The offset of the call's return address, *relative to the containing section*.
     pub ret_addr: CodeOffset,
-    /// The call's opcode.
-    pub opcode: Opcode,
 }
 
 /// A source-location mapping resulting from a compilation.
@@ -2173,7 +2166,7 @@ mod test {
         buf.put1(2);
         buf.add_trap(TrapCode::IntegerOverflow);
         buf.add_trap(TrapCode::IntegerDivisionByZero);
-        buf.add_call_site(Opcode::Call);
+        buf.add_call_site();
         buf.add_reloc(
             Reloc::Abs4,
             &ExternalName::User(UserExternalNameRef::new(0)),

@@ -1,7 +1,7 @@
 //! This module defines x86_64-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
-use crate::ir::{types, ExternalName, LibCall, Opcode, RelSourceLoc, TrapCode, Type};
+use crate::ir::{types, ExternalName, LibCall, RelSourceLoc, TrapCode, Type};
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::{pretty_print_reg, show_ireg_sized};
 use crate::isa::x64::settings as x64_settings;
@@ -40,8 +40,6 @@ pub struct CallInfo {
     pub defs: CallRetList,
     /// Registers clobbered by this call, as per its calling convention.
     pub clobbers: PRegSet,
-    /// The opcode of this call.
-    pub opcode: Opcode,
 }
 
 #[test]
@@ -512,7 +510,6 @@ impl Inst {
         uses: CallArgList,
         defs: CallRetList,
         clobbers: PRegSet,
-        opcode: Opcode,
     ) -> Inst {
         Inst::CallKnown {
             dest,
@@ -520,7 +517,6 @@ impl Inst {
                 uses,
                 defs,
                 clobbers,
-                opcode,
             }),
         }
     }
@@ -530,7 +526,6 @@ impl Inst {
         uses: CallArgList,
         defs: CallRetList,
         clobbers: PRegSet,
-        opcode: Opcode,
     ) -> Inst {
         dest.assert_regclass_is(RegClass::Int);
         Inst::CallUnknown {
@@ -539,7 +534,6 @@ impl Inst {
                 uses,
                 defs,
                 clobbers,
-                opcode,
             }),
         }
     }

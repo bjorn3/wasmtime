@@ -1,6 +1,6 @@
 //! Implementation of the standard x64 ABI.
 
-use crate::ir::{self, types, LibCall, MemFlags, Opcode, Signature, TrapCode, Type};
+use crate::ir::{self, types, LibCall, MemFlags, Signature, TrapCode, Type};
 use crate::ir::{types::*, ExternalName};
 use crate::isa;
 use crate::isa::{unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings, CallConv};
@@ -433,7 +433,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 uses: smallvec![],
                 defs: smallvec![],
                 clobbers: PRegSet::empty(),
-                opcode: Opcode::Call,
             }),
         });
     }
@@ -589,7 +588,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         uses: CallArgList,
         defs: CallRetList,
         clobbers: PRegSet,
-        opcode: ir::Opcode,
         tmp: Writable<Reg>,
         _callee_conv: isa::CallConv,
         _caller_conv: isa::CallConv,
@@ -597,7 +595,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let mut insts = SmallVec::new();
         match dest {
             &CallDest::ExtName(ref name, RelocDistance::Near) => {
-                insts.push(Inst::call_known(name.clone(), uses, defs, clobbers, opcode));
+                insts.push(Inst::call_known(name.clone(), uses, defs, clobbers));
             }
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
                 insts.push(Inst::LoadExtName {
@@ -610,17 +608,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     uses,
                     defs,
                     clobbers,
-                    opcode,
                 ));
             }
             &CallDest::Reg(reg) => {
-                insts.push(Inst::call_unknown(
-                    RegMem::reg(reg),
-                    uses,
-                    defs,
-                    clobbers,
-                    opcode,
-                ));
+                insts.push(Inst::call_unknown(RegMem::reg(reg), uses, defs, clobbers));
             }
         }
         insts
@@ -667,7 +658,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             ],
             /* defs = */ smallvec![],
             /* clobbers = */ Self::get_regs_clobbered_by_call(call_conv),
-            Opcode::Call,
         ));
         insts
     }

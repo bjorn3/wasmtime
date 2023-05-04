@@ -560,7 +560,6 @@ pub trait ABIMachineSpec {
         uses: CallArgList,
         defs: CallRetList,
         clobbers: PRegSet,
-        opcode: ir::Opcode,
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
         caller_conv: isa::CallConv,
@@ -1999,8 +1998,6 @@ pub struct Caller<M: ABIMachineSpec> {
     clobbers: PRegSet,
     /// Call destination.
     dest: CallDest,
-    /// Actual call opcode; used to distinguish various types of calls.
-    opcode: ir::Opcode,
     /// Caller's calling convention.
     caller_conv: isa::CallConv,
     /// The settings controlling this compilation.
@@ -2036,7 +2033,6 @@ impl<M: ABIMachineSpec> Caller<M> {
             defs: smallvec![],
             clobbers,
             dest: CallDest::ExtName(extname.clone(), dist),
-            opcode: ir::Opcode::Call,
             caller_conv,
             flags,
             _mach: PhantomData,
@@ -2061,7 +2057,6 @@ impl<M: ABIMachineSpec> Caller<M> {
             defs: smallvec![],
             clobbers,
             dest: CallDest::ExtName(extname.clone(), dist),
-            opcode: ir::Opcode::Call,
             caller_conv,
             flags,
             _mach: PhantomData,
@@ -2074,7 +2069,6 @@ impl<M: ABIMachineSpec> Caller<M> {
         sigs: &SigSet,
         sig_ref: ir::SigRef,
         ptr: Reg,
-        opcode: ir::Opcode,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
     ) -> CodegenResult<Caller<M>> {
@@ -2086,7 +2080,6 @@ impl<M: ABIMachineSpec> Caller<M> {
             defs: smallvec![],
             clobbers,
             dest: CallDest::Reg(ptr),
-            opcode,
             caller_conv,
             flags,
             _mach: PhantomData,
@@ -2400,7 +2393,6 @@ impl<M: ABIMachineSpec> Caller<M> {
             uses,
             defs,
             self.clobbers,
-            self.opcode,
             tmp,
             ctx.sigs()[self.sig].call_conv,
             self.caller_conv,

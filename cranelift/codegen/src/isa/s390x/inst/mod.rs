@@ -1,7 +1,7 @@
 //! This module defines s390x-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::{types, ExternalName, Opcode, Type};
+use crate::ir::{types, ExternalName, Type};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
@@ -41,7 +41,6 @@ pub struct CallInfo {
     pub uses: CallArgList,
     pub defs: CallRetList,
     pub clobbers: PRegSet,
-    pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
     pub tls_symbol: Option<SymbolReloc>,
@@ -55,7 +54,6 @@ pub struct CallIndInfo {
     pub uses: CallArgList,
     pub defs: CallRetList,
     pub clobbers: PRegSet,
-    pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
 }

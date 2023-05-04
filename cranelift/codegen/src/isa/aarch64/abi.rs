@@ -4,7 +4,6 @@ use crate::ir;
 use crate::ir::types;
 use crate::ir::types::*;
 use crate::ir::MemFlags;
-use crate::ir::Opcode;
 use crate::ir::{dynamic_to_fixed, ExternalName, LibCall, Signature};
 use crate::isa;
 use crate::isa::aarch64::{inst::EmitState, inst::*, settings as aarch64_settings};
@@ -977,7 +976,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         uses: CallArgList,
         defs: CallRetList,
         clobbers: PRegSet,
-        opcode: ir::Opcode,
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
         caller_conv: isa::CallConv,
@@ -990,7 +988,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     uses,
                     defs,
                     clobbers,
-                    opcode,
                     caller_callconv: caller_conv,
                     callee_callconv: callee_conv,
                 }),
@@ -1007,7 +1004,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
                         uses,
                         defs,
                         clobbers,
-                        opcode,
                         caller_callconv: caller_conv,
                         callee_callconv: callee_conv,
                     }),
@@ -1019,7 +1015,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     uses,
                     defs,
                     clobbers,
-                    opcode,
                     caller_callconv: caller_conv,
                     callee_callconv: callee_conv,
                 }),
@@ -1061,7 +1056,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 ],
                 defs: smallvec![],
                 clobbers: Self::get_regs_clobbered_by_call(call_conv),
-                opcode: Opcode::Call,
                 caller_callconv: call_conv,
                 callee_callconv: call_conv,
             }),

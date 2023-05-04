@@ -706,7 +706,6 @@ macro_rules! isle_prelude_caller_methods {
                 self.lower_ctx.sigs(),
                 sig_ref,
                 ptr,
-                Opcode::CallIndirect,
                 caller_conv,
                 self.backend.flags().clone(),
             )

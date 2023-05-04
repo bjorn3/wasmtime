@@ -816,11 +816,10 @@ impl MachInstEmit for Inst {
                 // call
                 match info.dest {
                     ExternalName::User { .. } => {
-                        if info.opcode.is_call() {
-                            sink.add_call_site(info.opcode);
-                        }
+                        sink.add_call_site(); // FIXME should this be put after the call itself?
                         sink.add_reloc(Reloc::RiscvCall, &info.dest, 0);
                         if let Some(s) = state.take_stack_map() {
+                            // FIXME should this be put after the call itself?
                             sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
                         }
                         Inst::construct_auipc_and_jalr(
@@ -844,11 +843,11 @@ impl MachInstEmit for Inst {
                         .emit(&[], sink, emit_info, state);
 
                         if let Some(s) = state.take_stack_map() {
+                            // FIXME should this be put after the call itself?
                             sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                         }
-                        if info.opcode.is_call() {
-                            sink.add_call_site(info.opcode);
-                        }
+                        sink.add_call_site(); // FIXME should this be put after the call itself?
+
                         // call
                         Inst::Jalr {
                             rd: writable_link_reg(),
@@ -862,12 +861,11 @@ impl MachInstEmit for Inst {
             &Inst::CallInd { ref info } => {
                 let rn = allocs.next(info.rn);
                 if let Some(s) = state.take_stack_map() {
+                    // FIXME should this be put after the call itself?
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
 
-                if info.opcode.is_call() {
-                    sink.add_call_site(info.opcode);
-                }
+                sink.add_call_site(); // FIXME should this be put after the call itself?
                 Inst::Jalr {
                     rd: writable_link_reg(),
                     base: rn,
