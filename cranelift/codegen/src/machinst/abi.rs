@@ -2307,43 +2307,53 @@ impl<M: ABIMachineSpec> Caller<M> {
     /// Define a return value after the call returns.
     pub fn gen_retval(
         &mut self,
-        ctx: &Lower<M::I>,
+        ctx: &mut Lower<M::I>,
         idx: usize,
-        into_regs: ValueRegs<Writable<Reg>>,
-    ) -> SmallInstVec<M::I> {
+    ) -> (SmallInstVec<M::I>, ValueRegs<Reg>) {
         let mut insts = smallvec![];
-        match &ctx.sigs().rets(self.sig)[idx] {
-            &ABIArg::Slots { ref slots, .. } => {
-                assert_eq!(into_regs.len(), slots.len());
-                for (slot, into_reg) in slots.iter().zip(into_regs.regs().iter()) {
+        let mut into_regs: SmallVec<[Reg; 2]> = smallvec![];
+        let arg = ctx.sigs().rets(self.sig)[idx].clone();
+        match arg {
+            ABIArg::Slots { ref slots, .. } => {
+                for slot in slots {
                     match slot {
                         // Extension mode doesn't matter because we're copying out, not in,
                         // and we ignore high bits in our own registers by convention.
-                        &ABIArgSlot::Reg { reg, .. } => {
+                        &ABIArgSlot::Reg { reg, ty, .. } => {
+                            let into_reg = ctx.alloc_tmp(ty).only_reg().unwrap();
                             self.defs.push(CallRetPair {
-                                vreg: *into_reg,
+                                vreg: into_reg,
                                 preg: reg.into(),
                             });
+                            into_regs.push(into_reg.to_reg());
                         }
                         &ABIArgSlot::Stack { offset, ty, .. } => {
+                            let into_reg = ctx.alloc_tmp(ty).only_reg().unwrap();
                             let ret_area_base = ctx.sigs()[self.sig].sized_stack_arg_space();
                             insts.push(M::gen_load_stack(
                                 StackAMode::SPOffset(offset + ret_area_base, ty),
-                                *into_reg,
+                                into_reg,
                                 ty,
                             ));
+                            into_regs.push(into_reg.to_reg());
                         }
                     }
                 }
             }
-            &ABIArg::StructArg { .. } => {
+            ABIArg::StructArg { .. } => {
                 panic!("StructArg not supported in return position");
             }
-            &ABIArg::ImplicitPtrArg { .. } => {
+            ABIArg::ImplicitPtrArg { .. } => {
                 panic!("ImplicitPtrArg not supported in return position");
             }
         }
-        insts
+
+        let value_regs = match *into_regs {
+            [a] => ValueRegs::one(a),
+            [a, b] => ValueRegs::two(a, b),
+            _ => panic!("Expected to see one or two slots only from {:?}", arg),
+        };
+        (insts, value_regs)
     }
 
     /// Emit the call itself.

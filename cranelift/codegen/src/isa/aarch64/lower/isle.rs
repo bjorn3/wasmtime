@@ -18,7 +18,6 @@ use crate::ir::condcodes;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm};
 use crate::isa::aarch64::lower::{lower_address, lower_pair_address};
 use crate::isa::aarch64::AArch64Backend;
-use crate::machinst::valueregs;
 use crate::machinst::{isle::*, InputSourceInst};
 use crate::{
     binemit::CodeOffset,
