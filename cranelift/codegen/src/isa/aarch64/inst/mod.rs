@@ -2498,10 +2498,10 @@ impl Inst {
                     format!("{} {}, {}", op, rd, rn)
                 }
             }
-            &Inst::Call { .. } => format!("bl 0"),
+            &Inst::Call { ref info } => format!("bl 0 {info:x?}"),
             &Inst::CallInd { ref info, .. } => {
                 let rn = pretty_print_reg(info.rn, allocs);
-                format!("blr {}", rn)
+                format!("blr {}, {info:x?}", rn)
             }
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();
