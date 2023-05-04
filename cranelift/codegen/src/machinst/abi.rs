@@ -913,7 +913,10 @@ impl SigSet {
     pub fn rets(&self, sig: Sig) -> &[ABIArg] {
         let sig_data = &self.sigs[sig];
         // Please see comments in `SigSet::from_func_sig` of how we store the offsets.
-        let start = usize::try_from(sig.prev().map_or(0, |prev| self.sigs[prev].args_end)).unwrap();
+
+        // FIXME maybe return langingpads too here? we will need to unconditionally add the
+        // landingpad args to the defs of the call instruction in that case.
+        let start = usize::try_from(sig.prev().map_or(0, |prev| self.sigs[prev].landingpad_args_end)).unwrap();
         let end = usize::try_from(sig_data.rets_end).unwrap();
         &self.abi_args[start..end]
     }

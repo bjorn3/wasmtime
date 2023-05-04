@@ -55,7 +55,7 @@ pub fn run(options: &Options) -> Result<()> {
         anyhow::bail!("compilation requires a target isa");
     };
 
-    std::env::set_var("RUST_BACKTRACE", "0"); // Disable backtraces to reduce verbosity
+    //std::env::set_var("RUST_BACKTRACE", "0"); // Disable backtraces to reduce verbosity
 
     for (func, _) in test_file.functions {
         let (orig_block_count, orig_inst_count) = (block_count(&func), inst_count(&func));
@@ -424,7 +424,7 @@ impl Mutator for ReplaceBlockParamWithConst {
             let dfg = &mut func.dfg;
             for branch in dfg.insts[pred.inst].branch_destination_mut(&mut dfg.jump_tables) {
                 if branch.block(&dfg.value_lists) == self.block {
-                    branch.remove(param_index, &mut dfg.value_lists);
+                    //branch.remove(param_index, &mut dfg.value_lists);
                 }
             }
         }
