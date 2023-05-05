@@ -2382,10 +2382,8 @@ impl<M: ABIMachineSpec> Caller<M> {
             }
         }
 
-        let (uses, defs) = (
-            mem::replace(&mut self.uses, Default::default()),
-            mem::replace(&mut self.defs, Default::default()),
-        );
+        let uses = mem::take(&mut self.uses);
+        let defs = mem::take(&mut self.defs);
 
         let tmp = ctx.alloc_tmp(word_type).only_reg().unwrap();
         for inst in M::gen_call(
