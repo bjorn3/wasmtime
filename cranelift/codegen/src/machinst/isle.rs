@@ -912,7 +912,7 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
 
             for param_idx in 0..landingpad_arg_count {
                 let param_ty = ctx.dfg().value_type(landingpad_block_params[param_idx]);
-                assert_eq!(param_ty, types::I64); // FIXME pointer type
+                assert_eq!(param_ty, M::word_type()); // FIXME move this validation to the verifier
             }
 
             landingpad_arg_count
