@@ -916,7 +916,11 @@ impl SigSet {
 
         // FIXME maybe return langingpads too here? we will need to unconditionally add the
         // landingpad args to the defs of the call instruction in that case.
-        let start = usize::try_from(sig.prev().map_or(0, |prev| self.sigs[prev].landingpad_args_end)).unwrap();
+        let start = usize::try_from(
+            sig.prev()
+                .map_or(0, |prev| self.sigs[prev].landingpad_args_end),
+        )
+        .unwrap();
         let end = usize::try_from(sig_data.rets_end).unwrap();
         &self.abi_args[start..end]
     }
@@ -2438,7 +2442,6 @@ impl<M: ABIMachineSpec> Caller<M> {
         log::info!(
             "{dest:?}({uses:?}) -> ({defs:?}) clobbers {clobbers:?}",
             dest = self.dest,
-            clobbers = self.clobbers
         );
         for inst in M::gen_call(
             &self.dest,
