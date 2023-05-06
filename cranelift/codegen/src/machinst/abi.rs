@@ -891,39 +891,6 @@ impl SigSet {
         self.rets(sig)[idx].clone()
     }
 
-    /// Return all clobbers for the callsite.
-    pub fn call_clobbers<M: ABIMachineSpec>(&self, sig: Sig) -> PRegSet {
-        let sig_data = &self.sigs[sig];
-        // Get clobbers: all caller-saves. These may include return value
-        // regs, which we will remove from the clobber set below.
-        let mut clobbers = M::get_regs_clobbered_by_call(sig_data.call_conv);
-
-        // Remove retval regs from clobbers. Skip StructRets: these
-        // are not, semantically, returns at the CLIF level, so we
-        // treat such a value as a clobber instead.
-        for ret in self.rets(sig) {
-            if let &ABIArg::Slots {
-                ref slots, purpose, ..
-            } = ret
-            {
-                if purpose == ir::ArgumentPurpose::StructReturn {
-                    continue;
-                }
-                for slot in slots {
-                    match slot {
-                        &ABIArgSlot::Reg { reg, .. } => {
-                            log::trace!("call_clobbers: retval reg {:?}", reg);
-                            clobbers.remove(PReg::from(reg));
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-
-        clobbers
-    }
-
     /// Get the number of arguments expected.
     pub fn num_args(&self, sig: Sig) -> usize {
         let len = self.args(sig).len();
@@ -1994,8 +1961,6 @@ pub struct Caller<M: ABIMachineSpec> {
     uses: CallArgList,
     /// All defs for the callsite, i.e., return values.
     defs: CallRetList,
-    /// Caller-save clobbers.
-    clobbers: PRegSet,
     /// Call destination.
     dest: CallDest,
     /// Caller's calling convention.
@@ -2026,12 +1991,10 @@ impl<M: ABIMachineSpec> Caller<M> {
         flags: settings::Flags,
     ) -> CodegenResult<Caller<M>> {
         let sig = sigs.abi_sig_for_sig_ref(sig_ref);
-        let clobbers = sigs.call_clobbers::<M>(sig);
         Ok(Caller {
             sig,
             uses: smallvec![],
             defs: smallvec![],
-            clobbers,
             dest: CallDest::ExtName(extname.clone(), dist),
             caller_conv,
             flags,
@@ -2050,12 +2013,10 @@ impl<M: ABIMachineSpec> Caller<M> {
         flags: settings::Flags,
     ) -> CodegenResult<Caller<M>> {
         let sig = sigs.abi_sig_for_signature(sig);
-        let clobbers = sigs.call_clobbers::<M>(sig);
         Ok(Caller {
             sig,
             uses: smallvec![],
             defs: smallvec![],
-            clobbers,
             dest: CallDest::ExtName(extname.clone(), dist),
             caller_conv,
             flags,
@@ -2073,12 +2034,10 @@ impl<M: ABIMachineSpec> Caller<M> {
         flags: settings::Flags,
     ) -> CodegenResult<Caller<M>> {
         let sig = sigs.abi_sig_for_sig_ref(sig_ref);
-        let clobbers = sigs.call_clobbers::<M>(sig);
         Ok(Caller {
             sig,
             uses: smallvec![],
             defs: smallvec![],
-            clobbers,
             dest: CallDest::Reg(ptr),
             caller_conv,
             flags,
@@ -2384,13 +2343,25 @@ impl<M: ABIMachineSpec> Caller<M> {
 
         let uses = mem::take(&mut self.uses);
         let defs = mem::take(&mut self.defs);
+        let clobbers = {
+            // Get clobbers: all caller-saves. These may include return value
+            // regs, which we will remove from the clobber set below.
+            let mut clobbers = <M>::get_regs_clobbered_by_call(ctx.sigs()[self.sig].call_conv);
+
+            // Remove retval regs from clobbers.
+            for def in &defs {
+                clobbers.remove(PReg::from(def.preg.to_real_reg().unwrap()));
+            }
+
+            clobbers
+        };
 
         let tmp = ctx.alloc_tmp(word_type).only_reg().unwrap();
         for inst in M::gen_call(
             &self.dest,
             uses,
             defs,
-            self.clobbers,
+            clobbers,
             tmp,
             ctx.sigs()[self.sig].call_conv,
             self.caller_conv,

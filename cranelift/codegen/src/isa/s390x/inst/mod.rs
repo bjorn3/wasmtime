@@ -8,7 +8,7 @@ use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use regalloc2::{PRegSet, VReg};
+use regalloc2::{PReg, PRegSet, VReg};
 use smallvec::SmallVec;
 use std::string::{String, ToString};
 pub mod regs;
@@ -40,7 +40,7 @@ pub struct CallInfo {
     pub dest: ExternalName,
     pub uses: CallArgList,
     pub defs: CallRetList,
-    pub clobbers: PRegSet,
+    pub clobbers: PRegSet, // FIXME calculate on the fly instead
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
     pub tls_symbol: Option<SymbolReloc>,
@@ -53,7 +53,7 @@ pub struct CallIndInfo {
     pub rn: Reg,
     pub uses: CallArgList,
     pub defs: CallRetList,
-    pub clobbers: PRegSet,
+    pub clobbers: PRegSet, // FIXME calculate on the fly instead
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
 }
@@ -915,26 +915,28 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(rn);
         }
         &Inst::Call { link, ref info } => {
+            let mut clobbers = info.clobbers.clone();
+            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
             for d in &info.defs {
                 collector.reg_fixed_def(d.vreg, d.preg);
+                clobbers.remove(PReg::from(d.preg.to_real_reg().unwrap()));
             }
-            let mut clobbers = info.clobbers.clone();
-            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
             collector.reg_clobbers(clobbers);
         }
         &Inst::CallInd { link, ref info } => {
+            let mut clobbers = info.clobbers.clone();
+            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
             collector.reg_use(info.rn);
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
             for d in &info.defs {
                 collector.reg_fixed_def(d.vreg, d.preg);
+                clobbers.remove(PReg::from(d.preg.to_real_reg().unwrap()));
             }
-            let mut clobbers = info.clobbers.clone();
-            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
             collector.reg_clobbers(clobbers);
         }
         &Inst::Args { ref args } => {
