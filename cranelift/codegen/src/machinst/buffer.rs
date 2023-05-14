@@ -141,6 +141,7 @@
 //! semantics below (grep for "Preserves execution semantics").
 
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
+use crate::ir::immediates::Imm64;
 use crate::ir::{ExternalName, RelSourceLoc, SourceLoc, TrapCode};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::{
@@ -299,7 +300,7 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     /// Any trap records referring to this code.
     pub(crate) traps: SmallVec<[MachTrap; 16]>,
     /// Any call site records referring to this code.
-    pub(crate) call_sites: SmallVec<[MachCallSite; 16]>,
+    pub(crate) call_sites: SmallVec<[MachCallSiteFinalized; 16]>,
     /// Any source location mappings referring to this code.
     pub(crate) srclocs: SmallVec<[T::MachSrcLocType; 64]>,
     /// Any stack maps referring to this code.
@@ -1372,11 +1373,29 @@ impl<I: VCodeInst> MachBuffer<I> {
         let mut srclocs = self.srclocs;
         srclocs.sort_by_key(|entry| entry.start);
 
+        let call_sites = self
+            .call_sites
+            .into_iter()
+            .map(|call_site| MachCallSiteFinalized {
+                ret_addr: call_site.ret_addr,
+                id: call_site.id,
+                alternate_targets: call_site
+                    .alternate_targets
+                    .into_iter()
+                    .map(|target| {
+                        let offset = self.label_offsets[target.0 as usize];
+                        assert_ne!(offset, UNKNOWN_LABEL_OFFSET);
+                        offset
+                    })
+                    .collect(),
+            })
+            .collect();
+
         MachBufferFinalized {
             data: self.data,
             relocs: self.relocs,
             traps: self.traps,
-            call_sites: self.call_sites,
+            call_sites,
             srclocs,
             stack_maps: self.stack_maps,
             unwind_info: self.unwind_info,
@@ -1436,9 +1455,15 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Add a call-site record at the current offset.
-    pub fn add_call_site(&mut self) {
+    pub fn add_call_site(
+        &mut self,
+        id: Option<Imm64>,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
+    ) {
         self.call_sites.push(MachCallSite {
             ret_addr: self.data.len() as CodeOffset,
+            id,
+            alternate_targets,
         });
     }
 
@@ -1549,7 +1574,7 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
     }
 
     /// Get the list of call sites for this code.
-    pub fn call_sites(&self) -> &[MachCallSite] {
+    pub fn call_sites(&self) -> &[MachCallSiteFinalized] {
         &self.call_sites[..]
     }
 }
@@ -1625,6 +1650,24 @@ pub struct MachTrap {
 pub struct MachCallSite {
     /// The offset of the call's return address, *relative to the containing section*.
     pub ret_addr: CodeOffset,
+    /// Id for this invoke. `None` for `call` instructions and synthetic calls.
+    // FIXME maybe distinguish synthetic calls and explicit call instructions?
+    pub id: Option<Imm64>,
+    /// Locations of the alternate targets for an `invoke` instruction.
+    pub alternate_targets: SmallVec<[MachLabel; 0]>,
+}
+
+/// A call site record resulting from a compilation.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MachCallSiteFinalized {
+    /// The offset of the call's return address, *relative to the containing section*.
+    pub ret_addr: CodeOffset,
+    /// Id for this invoke. `None` for `call` instructions and synthetic calls.
+    // FIXME maybe distinguish synthetic calls and explicit call instructions?
+    pub id: Option<Imm64>,
+    /// Locations of the alternate targets for an `invoke` instruction.
+    pub alternate_targets: SmallVec<[CodeOffset; 0]>,
 }
 
 /// A source-location mapping resulting from a compilation.
@@ -2166,7 +2209,7 @@ mod test {
         buf.put1(2);
         buf.add_trap(TrapCode::IntegerOverflow);
         buf.add_trap(TrapCode::IntegerDivisionByZero);
-        buf.add_call_site();
+        buf.add_call_site(None, smallvec![]);
         buf.add_reloc(
             Reloc::Abs4,
             &ExternalName::User(UserExternalNameRef::new(0)),

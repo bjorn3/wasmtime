@@ -3136,7 +3136,7 @@ impl MachInstEmit for Inst {
                 }
                 sink.add_reloc(Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
-                sink.add_call_site();
+                sink.add_call_site(info.id, info.alternate_targets.clone());
             }
             &Inst::CallInd { ref info } => {
                 if let Some(s) = state.take_stack_map() {
@@ -3144,7 +3144,7 @@ impl MachInstEmit for Inst {
                 }
                 let rn = allocs.next(info.rn);
                 sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5));
-                sink.add_call_site();
+                sink.add_call_site(info.id, info.alternate_targets.clone());
             }
             &Inst::CondBr {
                 taken,
@@ -3556,6 +3556,8 @@ impl MachInstEmit for Inst {
                         clobbers: PRegSet::empty(),
                         caller_callconv: CallConv::AppleAarch64,
                         callee_callconv: CallConv::AppleAarch64,
+                        id: None,
+                        alternate_targets: smallvec![],
                     }),
                 }
                 .emit(&[], sink, emit_info, state);

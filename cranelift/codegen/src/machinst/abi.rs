@@ -104,6 +104,7 @@
 use crate::binemit::StackMap;
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::fx::FxHashMap;
+use crate::ir::immediates::Imm64;
 use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, DynamicStackSlot, Signature, StackSlot};
 use crate::isa::TargetIsa;
@@ -565,6 +566,8 @@ pub trait ABIMachineSpec {
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
         caller_conv: isa::CallConv,
+        id: Option<Imm64>,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
     ) -> SmallVec<[Self::I; 2]>;
 
     /// Generate a memcpy invocation. Used to set up struct
@@ -2408,7 +2411,12 @@ impl<M: ABIMachineSpec> Caller<M> {
     ///
     /// This function should only be called once, as it is allowed to re-use
     /// parts of the `Caller` object in emitting instructions.
-    pub fn emit_call(&mut self, ctx: &mut Lower<M::I>) {
+    pub fn emit_call(
+        &mut self,
+        ctx: &mut Lower<M::I>,
+        id: Option<Imm64>,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
+    ) {
         let word_type = M::word_type();
         if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg {
             let rd = ctx.alloc_tmp(word_type).only_reg().unwrap();
@@ -2451,6 +2459,8 @@ impl<M: ABIMachineSpec> Caller<M> {
             tmp,
             ctx.sigs()[self.sig].call_conv,
             self.caller_conv,
+            id,
+            alternate_targets,
         )
         .into_iter()
         {

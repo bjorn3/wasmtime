@@ -328,6 +328,7 @@ fn define_control_flow(
             Operand::new("FN", &entities.func_ref)
                 .with_doc("function to call, declared by `function`"),
             Operand::new("args", &entities.varargs).with_doc("call arguments"),
+            Operand::new("id", &imm.imm64),
             Operand::new("JT", &entities.jump_table),
         ])
         .call()
@@ -355,6 +356,7 @@ fn define_control_flow(
             Operand::new("SIG", &entities.sig_ref).with_doc("function signature"),
             Operand::new("callee", iAddr).with_doc("address of function to call"),
             Operand::new("args", &entities.varargs).with_doc("call arguments"),
+            Operand::new("id", &imm.imm64),
             Operand::new("JT", &entities.jump_table),
         ])
         .call()

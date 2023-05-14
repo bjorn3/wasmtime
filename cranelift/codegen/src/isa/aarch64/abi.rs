@@ -1,6 +1,7 @@
 //! Implementation of a standard AArch64 ABI.
 
 use crate::ir;
+use crate::ir::immediates::Imm64;
 use crate::ir::types;
 use crate::ir::types::*;
 use crate::ir::MemFlags;
@@ -984,6 +985,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
         caller_conv: isa::CallConv,
+        id: Option<Imm64>,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
     ) -> SmallVec<[Inst; 2]> {
         let mut insts = SmallVec::new();
         match &dest {
@@ -995,6 +998,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     clobbers,
                     caller_callconv: caller_conv,
                     callee_callconv: callee_conv,
+                    id,
+                    alternate_targets,
                 }),
             }),
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
@@ -1011,6 +1016,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                         clobbers,
                         caller_callconv: caller_conv,
                         callee_callconv: callee_conv,
+                        id,
+                        alternate_targets,
                     }),
                 });
             }
@@ -1022,6 +1029,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     clobbers,
                     caller_callconv: caller_conv,
                     callee_callconv: callee_conv,
+                    id,
+                    alternate_targets,
                 }),
             }),
         }
@@ -1063,6 +1072,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 clobbers: Self::get_regs_clobbered_by_call(call_conv),
                 caller_callconv: call_conv,
                 callee_callconv: call_conv,
+                id: None,
+                alternate_targets: smallvec![],
             }),
         });
         insts

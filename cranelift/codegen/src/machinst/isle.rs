@@ -1,3 +1,4 @@
+use crate::ir::immediates::Imm64;
 use crate::ir::{BlockCall, Value, ValueList};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -733,6 +734,7 @@ macro_rules! isle_prelude_caller_methods {
             extname: ExternalName,
             dist: RelocDistance,
             args @ (inputs, off): ValueSlice,
+            id: Imm64,
             landingpads: &VecBlockCall,
             targets: &VecMachLabel,
         ) -> VecInstOutput {
@@ -759,6 +761,7 @@ macro_rules! isle_prelude_caller_methods {
                 num_rets,
                 caller,
                 args,
+                id,
                 targets,
                 landingpads,
             )
@@ -769,6 +772,7 @@ macro_rules! isle_prelude_caller_methods {
             sig_ref: SigRef,
             val: Value,
             args @ (inputs, off): ValueSlice,
+            id: Imm64,
             landingpads: &VecBlockCall,
             targets: &VecMachLabel,
         ) -> VecInstOutput {
@@ -795,6 +799,7 @@ macro_rules! isle_prelude_caller_methods {
                 num_rets,
                 caller,
                 args,
+                id,
                 targets,
                 landingpads,
             )
@@ -843,7 +848,7 @@ pub fn gen_call_common<M: ABIMachineSpec>(
         outputs.push(retval_regs);
     }
 
-    caller.emit_call(ctx);
+    caller.emit_call(ctx, None, smallvec::smallvec![]);
 
     for inst in retval_insts {
         ctx.emit(inst);
@@ -859,6 +864,7 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
     num_rets: usize,
     mut caller: Caller<M>,
     (inputs, off): ValueSlice,
+    id: Imm64,
     targets: &[MachLabel],
     landingpads: &VecBlockCall,
 ) -> VecInstOutput {
@@ -936,7 +942,7 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
     }
     log::info!("{outputs:?}");
 
-    caller.emit_call(ctx);
+    caller.emit_call(ctx, Some(id), targets[1..].iter().copied().collect());
 
     for inst in retval_insts {
         ctx.emit(inst);

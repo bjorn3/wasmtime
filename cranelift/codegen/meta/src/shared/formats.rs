@@ -136,12 +136,14 @@ impl Formats {
             invoke: Builder::new("Invoke")
                 .imm(&entities.func_ref)
                 .varargs()
+                .imm(&imm.imm64)
                 .imm(&entities.jump_table)
                 .build(),
 
             invoke_indirect: Builder::new("InvokeIndirect")
                 .imm(&entities.sig_ref)
                 .value()
+                .imm(&imm.imm64)
                 .varargs()
                 .imm(&entities.jump_table)
                 .build(),

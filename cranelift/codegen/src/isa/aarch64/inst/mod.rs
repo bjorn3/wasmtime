@@ -1,6 +1,7 @@
 //! This module defines aarch64-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
+use crate::ir::immediates::Imm64;
 use crate::ir::types::{F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
 use crate::ir::{types, ExternalName, MemFlags, Type};
 use crate::isa::{CallConv, FunctionAlignment};
@@ -89,6 +90,11 @@ pub struct CallInfo {
     pub caller_callconv: CallConv,
     /// Callee calling convention.
     pub callee_callconv: CallConv,
+    /// Id for this invoke. `None` for `call` instructions and synthetic calls.
+    // FIXME maybe distinguish synthetic calls and explicit call instructions?
+    pub id: Option<Imm64>,
+    /// Locations of the alternate targets for an `invoke` instruction.
+    pub alternate_targets: SmallVec<[MachLabel; 0]>,
 }
 
 /// Additional information for CallInd instructions, left out of line to lower the size of the Inst
@@ -107,6 +113,11 @@ pub struct CallIndInfo {
     pub caller_callconv: CallConv,
     /// Callee calling convention.
     pub callee_callconv: CallConv,
+    /// Id for this invoke. `None` for `call` instructions and synthetic calls.
+    // FIXME maybe distinguish synthetic calls and explicit call instructions?
+    pub id: Option<Imm64>,
+    /// Locations of the alternate targets for an `invoke` instruction.
+    pub alternate_targets: SmallVec<[MachLabel; 0]>,
 }
 
 /// Additional information for JTSequence instructions, left out of line to lower the size of the Inst

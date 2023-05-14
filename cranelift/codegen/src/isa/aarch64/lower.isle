@@ -2913,16 +2913,16 @@
 
 ;;;; Rules for invokes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower_branch (invoke (func_ref_data sig_ref extname dist) inputs jump_table) targets)
+(rule (lower_branch (invoke (func_ref_data sig_ref extname dist) inputs id jump_table) targets)
       (let ((results VecInstOutput
-                  (gen_invoke sig_ref extname dist inputs (landingpads jump_table) targets))
+                  (gen_invoke sig_ref extname dist inputs id (landingpads jump_table) targets))
             ; FIXME move into gen_invoke
             (_ Unit (emit_side_effect (aarch64_jump (branch_target targets 0)))))
         results))
 
-(rule (lower_branch (invoke_indirect sig_ref val inputs jump_table) targets)
+(rule (lower_branch (invoke_indirect sig_ref val inputs id jump_table) targets)
       (let ((results VecInstOutput
-                  (gen_invoke_indirect sig_ref val inputs (landingpads jump_table) targets))
+                  (gen_invoke_indirect sig_ref val inputs id (landingpads jump_table) targets))
             ; FIXME move into gen_invoke_indirect
             (_ Unit (emit_side_effect (aarch64_jump (branch_target targets 0)))))
         results))
