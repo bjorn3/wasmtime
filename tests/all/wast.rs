@@ -31,6 +31,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
     let threads = feature_found(wast, "threads");
     let reference_types = !(threads && feature_found(wast, "proposals"));
     let relaxed_simd = feature_found(wast, "relaxed-simd");
+    let exceptions = feature_found(wast, "exception-handling");
     let use_shared_memory = feature_found_src(&wast_bytes, "shared_memory")
         || feature_found_src(&wast_bytes, "shared)");
 
@@ -45,6 +46,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         .wasm_memory64(memory64)
         .wasm_reference_types(reference_types)
         .wasm_relaxed_simd(relaxed_simd)
+        .wasm_exceptions(exceptions)
         .cranelift_debug_verifier(true);
 
     cfg.wasm_component_model(feature_found(wast, "component-model"));

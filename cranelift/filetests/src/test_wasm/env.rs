@@ -83,6 +83,7 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
             memory64: true,
             multi_memory: true,
             relaxed_simd: true,
+            exceptions: true,
             ..self.inner.wasm_features()
         }
     }

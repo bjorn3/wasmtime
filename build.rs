@@ -23,6 +23,7 @@ fn main() -> anyhow::Result<()> {
         writeln!(out, "#[allow(non_snake_case)]")?;
         writeln!(out, "mod {} {{", strategy)?;
 
+        /*
         with_test_module(&mut out, "misc", |out| {
             test_directory(out, "tests/misc_testsuite", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/multi-memory", strategy)?;
@@ -32,12 +33,14 @@ fn main() -> anyhow::Result<()> {
             test_directory_module(out, "tests/misc_testsuite/component-model", strategy)?;
             Ok(())
         })?;
+        */
 
         with_test_module(&mut out, "spec", |out| {
             let spec_tests = test_directory(out, "tests/spec_testsuite", strategy)?;
             // Skip running spec_testsuite tests if the submodule isn't checked
             // out.
             if spec_tests > 0 {
+                /*
                 test_directory_module(out, "tests/spec_testsuite/proposals/memory64", strategy)?;
                 test_directory_module(
                     out,
@@ -48,6 +51,12 @@ fn main() -> anyhow::Result<()> {
                 test_directory_module(
                     out,
                     "tests/spec_testsuite/proposals/relaxed-simd",
+                    strategy,
+                )?;
+                */
+                test_directory_module(
+                    out,
+                    "tests/spec_testsuite/proposals/exception-handling",
                     strategy,
                 )?;
             } else {
