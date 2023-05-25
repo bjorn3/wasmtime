@@ -799,6 +799,21 @@ impl Config {
         self
     }
 
+    /// Configures whether the WebAssembly exception handling [proposal] will
+    /// be enabled for compilation.
+    ///
+    /// Note that this the upstream specification is not finalized and Wasmtime
+    /// may also have bugs for this feature since it hasn't been exercised
+    /// much.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/WebAssembly/exception-handling/
+    pub fn wasm_exceptions(&mut self, enable: bool) -> &mut Self {
+        self.features.exceptions = enable;
+        self
+    }
+
     /// Configures whether the WebAssembly component-model [proposal] will
     /// be enabled for compilation.
     ///

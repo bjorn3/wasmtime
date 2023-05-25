@@ -124,6 +124,7 @@ pub(crate) enum Definition {
 pub(crate) enum DefinitionType {
     Func(wasmtime_runtime::VMSharedSignatureIndex),
     Global(wasmtime_environ::Global),
+    Tag(wasmtime_environ::Tag),
     // Note that tables and memories store not only the original type
     // information but additionally the current size of the table/memory, as
     // this is used during linking since the min size specified in the type may
@@ -1373,6 +1374,7 @@ impl DefinitionType {
                 DefinitionType::Memory(*t.wasmtime_ty(data), t.internal_size(store))
             }
             Extern::SharedMemory(t) => DefinitionType::Memory(*t.ty().wasmtime_memory(), t.size()),
+            Extern::Tag(t) => DefinitionType::Tag(*t.wasmtime_ty(data)),
         }
     }
 
@@ -1382,6 +1384,7 @@ impl DefinitionType {
             DefinitionType::Table(..) => "table",
             DefinitionType::Memory(..) => "memory",
             DefinitionType::Global(_) => "global",
+            DefinitionType::Tag(_) => "tag",
         }
     }
 }

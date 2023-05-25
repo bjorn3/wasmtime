@@ -9,11 +9,11 @@ use crate::table::{Table, TableElement, TableElementType};
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
     VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMRuntimeLimits,
-    VMTableDefinition, VMTableImport,
+    VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::{
-    ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo, Store,
-    VMFunctionBody, VMSharedSignatureIndex, WasmFault,
+    ExportFunction, ExportGlobal, ExportMemory, ExportTable, ExportTag, Imports, ModuleRuntimeInfo,
+    Store, VMFunctionBody, VMSharedSignatureIndex, WasmFault,
 };
 use anyhow::Error;
 use anyhow::Result;
@@ -27,10 +27,11 @@ use std::ptr::NonNull;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::{mem, ptr};
+use wasmtime_environ::TagIndex;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
-    DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
-    GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
+    DefinedTableIndex, DefinedTagIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex,
+    GlobalIndex, GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
     TableInitialization, Trap, VMOffsets, WasmType, VMCONTEXT_MAGIC,
 };
 
@@ -188,6 +189,11 @@ impl Instance {
         unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmglobal_import(index)) }
     }
 
+    /// Return the indexed `VMTagImport`.
+    fn imported_tag(&self, index: TagIndex) -> &VMTagImport {
+        unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmtag_import(index)) }
+    }
+
     /// Return the indexed `VMTableDefinition`.
     #[allow(dead_code)]
     fn table(&mut self, index: DefinedTableIndex) -> VMTableDefinition {
@@ -267,6 +273,10 @@ impl Instance {
         } else {
             self.imported_global(index).from
         }
+    }
+
+    fn tag_ptr(&mut self, index: DefinedTagIndex) -> *mut VMTagDefinition {
+        unsafe { self.vmctx_plus_offset_mut(self.offsets().vmctx_vmtag_definition(index)) }
     }
 
     /// Return a pointer to the interrupts structure
@@ -384,6 +394,17 @@ impl Instance {
                 self.imported_global(index).from
             },
             global: self.module().globals[index],
+        }
+    }
+
+    fn get_exported_tag(&mut self, index: TagIndex) -> ExportTag {
+        ExportTag {
+            definition: if let Some(def_index) = self.module().defined_tag_index(index) {
+                self.tag_ptr(def_index)
+            } else {
+                self.imported_tag(index).from
+            },
+            tag: self.module().tags[index],
         }
     }
 
@@ -1157,6 +1178,11 @@ impl InstanceHandle {
         self.instance_mut().get_exported_table(export)
     }
 
+    /// Lookup a tag by index.
+    pub fn get_exported_tag(&mut self, export: TagIndex) -> ExportTag {
+        self.instance_mut().get_exported_tag(export)
+    }
+
     /// Lookup an item with the given index.
     pub fn get_export_by_index(&mut self, export: EntityIndex) -> Export {
         match export {
@@ -1164,6 +1190,7 @@ impl InstanceHandle {
             EntityIndex::Global(i) => Export::Global(self.get_exported_global(i)),
             EntityIndex::Table(i) => Export::Table(self.get_exported_table(i)),
             EntityIndex::Memory(i) => Export::Memory(self.get_exported_memory(i)),
+            EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(i)),
         }
     }
 

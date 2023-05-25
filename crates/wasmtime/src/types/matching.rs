@@ -2,7 +2,7 @@ use crate::linker::DefinitionType;
 use crate::{signatures::SignatureCollection, Engine};
 use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
-    EntityType, Global, Memory, ModuleTypes, SignatureIndex, Table, WasmFuncType, WasmType,
+    EntityType, Global, Memory, ModuleTypes, SignatureIndex, Table, Tag, WasmFuncType, WasmType,
 };
 use wasmtime_runtime::VMSharedSignatureIndex;
 
@@ -63,7 +63,10 @@ impl MatchCx<'_> {
                 DefinitionType::Func(actual) => self.vmshared_signature_index(*expected, *actual),
                 _ => bail!("expected func, but found {}", actual.desc()),
             },
-            EntityType::Tag(_) => unimplemented!(),
+            EntityType::Tag(expected) => match actual {
+                DefinitionType::Tag(actual) => tag_ty(self, expected, actual),
+                _ => bail!("expected func, but found {}", actual.desc()),
+            },
         }
     }
 }
@@ -177,6 +180,12 @@ fn memory_ty(expected: &Memory, actual: &Memory, actual_runtime_size: Option<u64
         actual.maximum,
         "memory",
     )?;
+    Ok(())
+}
+
+fn tag_ty(cx: &MatchCx<'_>, expected: &Tag, actual: &Tag) -> Result<()> {
+    // TODO
+    cx.vmshared_signature_index(expected.sig, actual.sig)?;
     Ok(())
 }
 

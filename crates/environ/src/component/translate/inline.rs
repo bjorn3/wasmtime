@@ -49,6 +49,7 @@ use crate::component::translate::adapt::{Adapter, AdapterOptions};
 use crate::component::translate::*;
 use crate::{EntityType, PrimaryMap};
 use indexmap::IndexMap;
+use wasmtime_types::TagIndex;
 
 pub(super) fn run(
     types: &ComponentTypesBuilder,
@@ -176,6 +177,7 @@ struct InlinerFrame<'a> {
     memories: PrimaryMap<MemoryIndex, dfg::CoreExport<EntityIndex>>,
     tables: PrimaryMap<TableIndex, dfg::CoreExport<EntityIndex>>,
     globals: PrimaryMap<GlobalIndex, dfg::CoreExport<EntityIndex>>,
+    tags: PrimaryMap<TagIndex, dfg::CoreExport<EntityIndex>>,
     modules: PrimaryMap<ModuleIndex, ModuleDef<'a>>,
 
     // component model index spaces
@@ -823,6 +825,7 @@ impl<'a> Inliner<'a> {
                 EntityIndex::Table(i) => frame.tables[i].clone().into(),
                 EntityIndex::Global(i) => frame.globals[i].clone().into(),
                 EntityIndex::Memory(i) => frame.memories[i].clone().into(),
+                EntityIndex::Tag(i) => frame.tags[i].clone().into(),
             },
         }
     }
@@ -1000,6 +1003,7 @@ impl<'a> InlinerFrame<'a> {
             component_funcs: Default::default(),
             module_instances: Default::default(),
             components: Default::default(),
+            tags: Default::default(),
             modules: Default::default(),
         }
     }

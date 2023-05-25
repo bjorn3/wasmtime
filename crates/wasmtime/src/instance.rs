@@ -9,10 +9,13 @@ use anyhow::{anyhow, bail, Context, Result};
 use std::mem;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::{EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex};
+use wasmtime_environ::{
+    EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex, TagIndex,
+};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, StorePtr, VMContext, VMFuncRef, VMFunctionImport,
     VMGlobalImport, VMMemoryImport, VMNativeCallFunction, VMOpaqueContext, VMTableImport,
+    VMTagImport,
 };
 
 /// An instantiated WebAssembly module.
@@ -533,6 +536,7 @@ pub(crate) struct OwnedImports {
     tables: PrimaryMap<TableIndex, VMTableImport>,
     memories: PrimaryMap<MemoryIndex, VMMemoryImport>,
     globals: PrimaryMap<GlobalIndex, VMGlobalImport>,
+    tags: PrimaryMap<TagIndex, VMTagImport>,
 }
 
 impl OwnedImports {
@@ -548,6 +552,7 @@ impl OwnedImports {
             tables: PrimaryMap::new(),
             memories: PrimaryMap::new(),
             globals: PrimaryMap::new(),
+            tags: PrimaryMap::new(),
         }
     }
 
@@ -557,6 +562,7 @@ impl OwnedImports {
         self.tables.reserve(raw.num_imported_tables);
         self.memories.reserve(raw.num_imported_memories);
         self.globals.reserve(raw.num_imported_globals);
+        self.tags.reserve(raw.num_imported_tags);
     }
 
     #[cfg(feature = "component-model")]
@@ -583,6 +589,9 @@ impl OwnedImports {
             }
             Extern::SharedMemory(i) => {
                 self.memories.push(i.vmimport(store));
+            }
+            Extern::Tag(t) => {
+                self.tags.push(t.vmimport(store));
             }
         }
     }
@@ -616,6 +625,9 @@ impl OwnedImports {
                     vmctx: m.vmctx,
                     index: m.index,
                 });
+            }
+            wasmtime_runtime::Export::Tag(t) => {
+                self.tags.push(VMTagImport { from: t.definition });
             }
         }
     }

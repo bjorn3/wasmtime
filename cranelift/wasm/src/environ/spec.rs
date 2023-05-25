@@ -126,6 +126,8 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// learn how to access the environment's implementation of each memory.
     fn heaps(&self) -> &PrimaryMap<Heap, HeapData>;
 
+    //fn tags(&self) -> &PrimaryMap<Tag, TagData>;
+
     /// Set up the necessary preamble definitions in `func` to access the linear memory identified
     /// by `index`.
     ///

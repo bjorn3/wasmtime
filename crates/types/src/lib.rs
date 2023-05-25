@@ -202,6 +202,11 @@ entity_impl!(OwnedMemoryIndex);
 pub struct DefinedGlobalIndex(u32);
 entity_impl!(DefinedGlobalIndex);
 
+/// Index type of a defined tag inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct DefinedTagIndex(u32);
+entity_impl!(DefinedTagIndex);
+
 /// Index type of a table (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct TableIndex(u32);
@@ -253,6 +258,8 @@ pub enum EntityIndex {
     Memory(MemoryIndex),
     /// Global index.
     Global(GlobalIndex),
+    /// Tag index.
+    Tag(TagIndex),
 }
 
 impl From<FuncIndex> for EntityIndex {
@@ -395,13 +402,16 @@ impl From<wasmparser::MemoryType> for Memory {
     }
 }
 
-/// WebAssembly event.
+/// A WebAssembly tag.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Tag {
-    /// The event signature type.
-    pub ty: TypeIndex,
+pub enum Tag {
+    Exception {
+        /// The tag signature type.
+        sig: SignatureIndex,
+    },
 }
 
+/*
 impl From<wasmparser::TagType> for Tag {
     fn from(ty: wasmparser::TagType) -> Tag {
         match ty.kind {
@@ -411,3 +421,4 @@ impl From<wasmparser::TagType> for Tag {
         }
     }
 }
+*/

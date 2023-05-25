@@ -140,7 +140,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             }
 
             ArgsOrRets::LandingpadArgs => {
-                assert!(call_conv == isa::CallConv::SystemV);
+                //assert!(call_conv == isa::CallConv::SystemV);
                 (2, 2) // x0-x1, FIXME, not v0-v1
             }
         };

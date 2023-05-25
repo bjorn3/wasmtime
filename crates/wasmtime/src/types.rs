@@ -1,5 +1,7 @@
 use std::fmt;
-use wasmtime_environ::{EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType, WasmType};
+use wasmtime_environ::{
+    EntityType, Global, Memory, ModuleTypes, Table, Tag, WasmFuncType, WasmType,
+};
 
 pub(crate) mod matching;
 
@@ -113,6 +115,8 @@ pub enum ExternType {
     Table(TableType),
     /// This external type is the type of a WebAssembly memory.
     Memory(MemoryType),
+    /// This external type is the type of a WebAssembly tag.
+    Tag(TagType),
 }
 
 macro_rules! accessors {
@@ -153,7 +157,7 @@ impl ExternType {
             EntityType::Global(ty) => GlobalType::from_wasmtime_global(ty).into(),
             EntityType::Memory(ty) => MemoryType::from_wasmtime_memory(ty).into(),
             EntityType::Table(ty) => TableType::from_wasmtime_table(ty).into(),
-            EntityType::Tag(_) => unimplemented!("wasm tag support"),
+            EntityType::Tag(ty) => TagType::from_wasmtime_tag(ty).into(),
         }
     }
 }
@@ -179,6 +183,12 @@ impl From<MemoryType> for ExternType {
 impl From<TableType> for ExternType {
     fn from(ty: TableType) -> ExternType {
         ExternType::Table(ty)
+    }
+}
+
+impl From<TagType> for ExternType {
+    fn from(ty: TagType) -> ExternType {
+        ExternType::Tag(ty)
     }
 }
 
@@ -433,6 +443,22 @@ impl MemoryType {
 
     pub(crate) fn wasmtime_memory(&self) -> &Memory {
         &self.ty
+    }
+}
+
+// Tag Types
+
+/// A WebAssembly tag descriptor.
+///
+/// TODO
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct TagType {
+    ty: Tag,
+}
+
+impl TagType {
+    pub(crate) fn from_wasmtime_tag(tag: &Tag) -> TagType {
+        TagType { ty: tag.clone() }
     }
 }
 

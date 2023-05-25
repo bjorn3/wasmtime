@@ -596,8 +596,18 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.reachable = false;
         }
         /********************************** Exception handing **********************************/
-        Operator::Try { .. }
-        | Operator::Catch { .. }
+        Operator::Try { blockty } => {
+            let (params, results) = blocktype_params_results(validator, *blockty)?;
+            let next = block_with_params(builder, results.clone(), environ)?;
+            let catch = builder.create_block();
+            builder.append_block_param(catch, environ.pointer_type());
+            state.push_try(next, catch, params.len(), results.len());
+        }
+        Operator::Throw { tag_index } => {
+            //let arg_tys = environ.tags();
+            todo!();
+        }
+        Operator::Catch { .. }
         | Operator::Throw { .. }
         | Operator::Rethrow { .. }
         | Operator::Delegate { .. }

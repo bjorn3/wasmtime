@@ -266,6 +266,46 @@ mod test_vmglobal_import {
     }
 }
 
+/// The fields compiled code needs to access to utilize a WebAssembly tag
+/// imported from another instance.
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+pub struct VMTagImport {
+    /// A pointer to the imported tag.
+    pub from: *mut VMTagDefinition,
+}
+
+// Declare that this type is send/sync, it's the responsibility of users of
+// `VMTableImport` to uphold this guarantee.
+unsafe impl Send for VMTagImport {}
+unsafe impl Sync for VMTagImport {}
+
+#[cfg(test)]
+mod test_vmtag_import {
+    use super::VMTagImport;
+    use memoffset::offset_of;
+    use std::mem::size_of;
+    use wasmtime_environ::{Module, VMOffsets};
+
+    #[test]
+    fn check_vmtag_import_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
+        assert_eq!(
+            size_of::<VMTagImport>(),
+            usize::from(offsets.size_of_vmtag_import())
+        );
+        assert_eq!(
+            offset_of!(VMTagImport, from),
+            usize::from(offsets.vmtag_import_from())
+        );
+        assert_eq!(
+            offset_of!(VMTagImport, vmctx),
+            usize::from(offsets.vmtag_import_vmctx())
+        );
+    }
+}
+
 /// The fields compiled code needs to access to utilize a WebAssembly linear
 /// memory defined within the instance, namely the start address and the
 /// size in bytes.
@@ -582,6 +622,41 @@ impl VMGlobalDefinition {
             .as_mut()
             .as_mut_ptr()
             .cast::<*const VMFuncRef>())
+    }
+}
+
+/// The fields compiled code needs to access to utilize a WebAssembly tag
+/// defined within the instance.
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+pub struct VMTagDefinition {
+    /// Unique pointer identifying the tag.
+    pub id: *mut u8,
+}
+
+#[cfg(test)]
+mod test_vmtag_definition {
+    use super::VMTagDefinition;
+    use memoffset::offset_of;
+    use std::mem::size_of;
+    use wasmtime_environ::{Module, VMOffsets};
+
+    #[test]
+    fn check_vmtable_definition_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
+        assert_eq!(
+            size_of::<VMTagDefinition>(),
+            usize::from(offsets.size_of_vmtable_definition())
+        );
+        assert_eq!(
+            offset_of!(VMTagDefinition, base),
+            usize::from(offsets.vmtable_definition_base())
+        );
+        assert_eq!(
+            offset_of!(VMTagDefinition, current_elements),
+            usize::from(offsets.vmtable_definition_current_elements())
+        );
     }
 }
 

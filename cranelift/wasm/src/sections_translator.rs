@@ -35,11 +35,7 @@ fn memory(ty: MemoryType) -> Memory {
 }
 
 fn tag(e: TagType) -> Tag {
-    match e.kind {
-        wasmparser::TagKind::Exception => Tag {
-            ty: TypeIndex::from_u32(e.func_type_idx),
-        },
-    }
+    unimplemented!()
 }
 
 fn table(ty: TableType) -> WasmResult<Table> {

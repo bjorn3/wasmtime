@@ -16,16 +16,18 @@
 //      imported_tables: [VMTableImport; module.num_imported_tables],
 //      imported_memories: [VMMemoryImport; module.num_imported_memories],
 //      imported_globals: [VMGlobalImport; module.num_imported_globals],
+//      imported_tags: [VMTagImport; module.num_imported_tags],
 //      tables: [VMTableDefinition; module.num_defined_tables],
 //      memories: [*mut VMMemoryDefinition; module.num_defined_memories],
 //      owned_memories: [VMMemoryDefinition; module.num_owned_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
+//      tags: [VMTagDefinition; module.num_defined_tags],
 //      func_refs: [VMFuncRef; module.num_escaped_funcs],
 // }
 
 use crate::{
-    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, FuncRefIndex,
-    GlobalIndex, MemoryIndex, Module, TableIndex,
+    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex, FuncIndex,
+    FuncRefIndex, GlobalIndex, MemoryIndex, Module, TableIndex, TagIndex,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::convert::TryFrom;
@@ -60,6 +62,8 @@ pub struct VMOffsets<P> {
     pub num_imported_memories: u32,
     /// The number of imported globals in the module.
     pub num_imported_globals: u32,
+    /// The number of imported tags in the module.
+    pub num_imported_tags: u32,
     /// The number of defined tables in the module.
     pub num_defined_tables: u32,
     /// The number of defined memories in the module.
@@ -68,6 +72,8 @@ pub struct VMOffsets<P> {
     pub num_owned_memories: u32,
     /// The number of defined globals in the module.
     pub num_defined_globals: u32,
+    /// The number of defined tags in the module.
+    pub num_defined_tags: u32,
     /// The number of escaped functions in the module, the size of the func_refs
     /// array.
     pub num_escaped_funcs: u32,
@@ -85,10 +91,12 @@ pub struct VMOffsets<P> {
     imported_tables: u32,
     imported_memories: u32,
     imported_globals: u32,
+    imported_tags: u32,
     defined_tables: u32,
     defined_memories: u32,
     owned_memories: u32,
     defined_globals: u32,
+    defined_tags: u32,
     defined_func_refs: u32,
     size: u32,
 }
@@ -152,6 +160,11 @@ pub trait PtrSize {
     #[inline]
     fn size_of_vmglobal_definition(&self) -> u8 {
         16
+    }
+
+    /// Return the size of `VMTagDefinition`; this is the size of a pointer.
+    fn size_of_vmtag_definition(&self) -> u8 {
+        self.size()
     }
 
     // Offsets within `VMRuntimeLimits`
@@ -261,6 +274,8 @@ pub struct VMOffsetsFields<P> {
     pub num_imported_memories: u32,
     /// The number of imported globals in the module.
     pub num_imported_globals: u32,
+    /// The number of imported tags in the module.
+    pub num_imported_tags: u32,
     /// The number of defined tables in the module.
     pub num_defined_tables: u32,
     /// The number of defined memories in the module.
@@ -269,6 +284,8 @@ pub struct VMOffsetsFields<P> {
     pub num_owned_memories: u32,
     /// The number of defined globals in the module.
     pub num_defined_globals: u32,
+    /// The number of defined tags in the module.
+    pub num_defined_tags: u32,
     /// The number of escaped functions in the module, the size of the function
     /// references array.
     pub num_escaped_funcs: u32,
@@ -291,12 +308,14 @@ impl<P: PtrSize> VMOffsets<P> {
             num_imported_tables: cast_to_u32(module.num_imported_tables),
             num_imported_memories: cast_to_u32(module.num_imported_memories),
             num_imported_globals: cast_to_u32(module.num_imported_globals),
+            num_imported_tags: cast_to_u32(module.num_imported_tags),
             num_defined_tables: cast_to_u32(module.table_plans.len() - module.num_imported_tables),
             num_defined_memories: cast_to_u32(
                 module.memory_plans.len() - module.num_imported_memories,
             ),
             num_owned_memories,
             num_defined_globals: cast_to_u32(module.globals.len() - module.num_imported_globals),
+            num_defined_tags: cast_to_u32(module.tags.len() - module.num_imported_tags),
             num_escaped_funcs: cast_to_u32(module.num_escaped_funcs),
         })
     }
@@ -322,9 +341,11 @@ impl<P: PtrSize> VMOffsets<P> {
                     num_imported_tables: _,
                     num_imported_memories: _,
                     num_imported_globals: _,
+                    num_imported_tags: _,
                     num_defined_tables: _,
                     num_defined_globals: _,
                     num_defined_memories: _,
+                    num_defined_tags: _,
                     num_owned_memories: _,
                     num_escaped_funcs: _,
 
@@ -353,10 +374,12 @@ impl<P: PtrSize> VMOffsets<P> {
 
         calculate_sizes! {
             defined_func_refs: "module functions",
+            defined_tags: "defined tags",
             defined_globals: "defined globals",
             owned_memories: "owned memories",
             defined_memories: "defined memories",
             defined_tables: "defined tables",
+            imported_tags: "imported tags",
             imported_globals: "imported globals",
             imported_memories: "imported memories",
             imported_tables: "imported tables",
@@ -381,10 +404,12 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_imported_tables: fields.num_imported_tables,
             num_imported_memories: fields.num_imported_memories,
             num_imported_globals: fields.num_imported_globals,
+            num_imported_tags: fields.num_imported_tags,
             num_defined_tables: fields.num_defined_tables,
             num_defined_memories: fields.num_defined_memories,
             num_owned_memories: fields.num_owned_memories,
             num_defined_globals: fields.num_defined_globals,
+            num_defined_tags: fields.num_defined_tags,
             num_escaped_funcs: fields.num_escaped_funcs,
             magic: 0,
             runtime_limits: 0,
@@ -398,10 +423,12 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             imported_tables: 0,
             imported_memories: 0,
             imported_globals: 0,
+            imported_tags: 0,
             defined_tables: 0,
             defined_memories: 0,
             owned_memories: 0,
             defined_globals: 0,
+            defined_tags: 0,
             defined_func_refs: 0,
             size: 0,
         };
@@ -453,6 +480,8 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
                 = cmul(ret.num_imported_memories, ret.size_of_vmmemory_import()),
             size(imported_globals)
                 = cmul(ret.num_imported_globals, ret.size_of_vmglobal_import()),
+            size(imported_tags)
+                = cmul(ret.num_imported_tags, ret.size_of_vmtag_import()),
             size(defined_tables)
                 = cmul(ret.num_defined_tables, ret.size_of_vmtable_definition()),
             size(defined_memories)
@@ -462,6 +491,8 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             align(16),
             size(defined_globals)
                 = cmul(ret.num_defined_globals, ret.ptr.size_of_vmglobal_definition()),
+            size(defined_tags)
+                = cmul(ret.num_defined_tags, ret.ptr.size_of_vmtag_definition()),
             size(defined_func_refs) = cmul(
                 ret.num_escaped_funcs,
                 ret.ptr.size_of_vm_func_ref(),
@@ -615,6 +646,23 @@ impl<P: PtrSize> VMOffsets<P> {
     }
 }
 
+/// Offsets for `VMTagImport`.
+impl<P: PtrSize> VMOffsets<P> {
+    /// The offset of the `from` field.
+    #[allow(clippy::erasing_op)]
+    #[inline]
+    pub fn vmtag_import_from(&self) -> u8 {
+        0 * self.pointer_size()
+    }
+
+    /// Return the size of `VMTagImport`.
+    #[allow(clippy::identity_op)]
+    #[inline]
+    pub fn size_of_vmtag_import(&self) -> u8 {
+        1 * self.pointer_size()
+    }
+}
+
 /// Offsets for `VMSharedSignatureIndex`.
 impl<P: PtrSize> VMOffsets<P> {
     /// Return the size of `VMSharedSignatureIndex`.
@@ -694,6 +742,12 @@ impl<P: PtrSize> VMOffsets<P> {
         self.imported_globals
     }
 
+    /// The offset of the `tags` array.
+    #[inline]
+    pub fn vmctx_imported_tags_begin(&self) -> u32 {
+        self.imported_tags
+    }
+
     /// The offset of the `tables` array.
     #[inline]
     pub fn vmctx_tables_begin(&self) -> u32 {
@@ -716,6 +770,12 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_globals_begin(&self) -> u32 {
         self.defined_globals
+    }
+
+    /// The offset of the `globals` array.
+    #[inline]
+    pub fn vmctx_tags_begin(&self) -> u32 {
+        self.defined_tags
     }
 
     /// The offset of the `func_refs` array.
@@ -768,6 +828,13 @@ impl<P: PtrSize> VMOffsets<P> {
             + index.as_u32() * u32::from(self.size_of_vmglobal_import())
     }
 
+    /// Return the offset to `VMGlobalImport` index `index`.
+    #[inline]
+    pub fn vmctx_vmtag_import(&self, index: TagIndex) -> u32 {
+        assert!(index.as_u32() < self.num_imported_tags);
+        self.vmctx_imported_tags_begin() + index.as_u32() * u32::from(self.size_of_vmtag_import())
+    }
+
     /// Return the offset to `VMTableDefinition` index `index`.
     #[inline]
     pub fn vmctx_vmtable_definition(&self, index: DefinedTableIndex) -> u32 {
@@ -797,6 +864,13 @@ impl<P: PtrSize> VMOffsets<P> {
         assert!(index.as_u32() < self.num_defined_globals);
         self.vmctx_globals_begin()
             + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
+    }
+
+    /// Return the offset to the `VMTagDefinition` index `index`.
+    #[inline]
+    pub fn vmctx_vmtag_definition(&self, index: DefinedTagIndex) -> u32 {
+        assert!(index.as_u32() < self.num_defined_tags);
+        self.vmctx_tags_begin() + index.as_u32() * u32::from(self.ptr.size_of_vmtag_definition())
     }
 
     /// Return the offset to the `VMFuncRef` for the given function

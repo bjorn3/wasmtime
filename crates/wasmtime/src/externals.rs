@@ -2,7 +2,7 @@ use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::{generate_global_export, generate_table_export};
 use crate::{
     AsContext, AsContextMut, Engine, ExternRef, ExternType, Func, GlobalType, Memory, Mutability,
-    SharedMemory, TableType, Val, ValType,
+    SharedMemory, TableType, TagType, Val, ValType,
 };
 use anyhow::{anyhow, bail, Result};
 use std::mem;
@@ -32,6 +32,8 @@ pub enum Extern {
     /// A WebAssembly shared memory; these are handled separately from
     /// [`Memory`].
     SharedMemory(SharedMemory),
+    /// A WebAssembly `tag`.
+    Tag(Tag),
 }
 
 impl Extern {
@@ -102,6 +104,7 @@ impl Extern {
             Extern::SharedMemory(ft) => ExternType::Memory(ft.ty()),
             Extern::Table(tt) => ExternType::Table(tt.ty(store)),
             Extern::Global(gt) => ExternType::Global(gt.ty(store)),
+            Extern::Tag(tt) => ExternType::Tag(tt.ty(store)),
         }
     }
 
@@ -126,6 +129,7 @@ impl Extern {
             wasmtime_runtime::Export::Table(t) => {
                 Extern::Table(Table::from_wasmtime_table(t, store))
             }
+            wasmtime_runtime::Export::Tag(t) => Extern::Tag(Tag::from_wasmtime_tag(t, store)),
         }
     }
 
@@ -136,6 +140,7 @@ impl Extern {
             Extern::Memory(m) => m.comes_from_same_store(store),
             Extern::SharedMemory(m) => Engine::same(m.engine(), store.engine()),
             Extern::Table(t) => store.store_data().contains(t.0),
+            Extern::Tag(t) => store.store_data().contains(t.0),
         }
     }
 }
@@ -691,6 +696,50 @@ impl Table {
             from: export.definition,
             vmctx: export.vmctx,
         }
+    }
+}
+
+/// A WebAssembly `tag`.
+///
+/// TODO
+///
+/// A [`Tag`] "belongs" to the store that it was originally created within
+/// (either via [`Table::new`] or via instantiating a
+/// [`Module`](crate::Module)). Operations on a [`Tag`] only work with the
+/// store it belongs to, and if another store is passed in by accident then
+/// methods will panic.
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)] // here for the C API
+pub struct Tag(Stored<wasmtime_runtime::ExportTag>);
+
+impl Tag {
+    /// Returns the underlying type of this `global`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this global.
+    pub fn ty(&self, store: impl AsContext) -> TagType {
+        let store = store.as_context();
+        let ty = &store[self.0].tag;
+        TagType::from_wasmtime_tag(&ty)
+    }
+
+    pub(crate) unsafe fn from_wasmtime_tag(
+        wasmtime_export: wasmtime_runtime::ExportTag,
+        store: &mut StoreOpaque,
+    ) -> Tag {
+        Tag(store.store_data_mut().insert(wasmtime_export))
+    }
+
+    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> wasmtime_runtime::VMTagImport {
+        let export = &store[self.0];
+        wasmtime_runtime::VMTagImport {
+            from: export.definition,
+        }
+    }
+
+    pub(crate) fn wasmtime_ty<'a>(&self, data: &'a StoreData) -> &'a wasmtime_environ::Tag {
+        &data[self.0].tag
     }
 }
 

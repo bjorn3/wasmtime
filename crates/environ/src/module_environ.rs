@@ -5,7 +5,8 @@ use crate::module::{
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global,
     GlobalIndex, GlobalInit, MemoryIndex, ModuleTypesBuilder, PrimaryMap, SignatureIndex,
-    TableIndex, TableInitialization, Tunables, TypeIndex, WasmError, WasmFuncType, WasmResult,
+    TableIndex, TableInitialization, Tag, TagIndex, Tunables, TypeIndex, WasmError, WasmFuncType,
+    WasmResult,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
@@ -273,9 +274,12 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             self.result.module.num_imported_tables += 1;
                             EntityType::Table(ty.try_into()?)
                         }
-
-                        // doesn't get past validation
-                        TypeRef::Tag(_) => unreachable!(),
+                        TypeRef::Tag(ty) => {
+                            let index = TypeIndex::from_u32(ty.func_type_idx);
+                            let sig_index = self.result.module.types[index].unwrap_function();
+                            self.result.module.num_imported_tags += 1;
+                            EntityType::Tag(Tag::Exception { sig: sig_index })
+                        }
                     };
                     self.declare_import(import.module, import.name, ty);
                 }
@@ -323,9 +327,16 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::TagSection(tags) => {
                 self.validator.tag_section(&tags)?;
 
-                // This feature isn't enabled at this time, so we should
-                // never get here.
-                unreachable!();
+                let cnt = usize::try_from(tags.count()).unwrap();
+                self.result.module.tags.reserve_exact(cnt);
+
+                for entry in tags {
+                    let entry = entry?;
+                    let index = TypeIndex::from_u32(entry.func_type_idx);
+                    let sig_index = self.result.module.types[index].unwrap_function();
+                    let tag = Tag::Exception { sig: sig_index };
+                    self.result.module.tags.push(tag);
+                }
             }
 
             Payload::GlobalSection(globals) => {
@@ -383,9 +394,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         ExternalKind::Table => EntityIndex::Table(TableIndex::from_u32(index)),
                         ExternalKind::Memory => EntityIndex::Memory(MemoryIndex::from_u32(index)),
                         ExternalKind::Global => EntityIndex::Global(GlobalIndex::from_u32(index)),
-
-                        // this never gets past validation
-                        ExternalKind::Tag => unreachable!(),
+                        ExternalKind::Tag => EntityIndex::Tag(TagIndex::from_u32(index)),
                     };
                     self.result
                         .module
@@ -747,7 +756,7 @@ and for re-adding support for interface types you can see this issue:
                 EntityIndex::Memory(self.result.module.memory_plans.push(plan))
             }
             EntityType::Global(ty) => EntityIndex::Global(self.result.module.globals.push(ty)),
-            EntityType::Tag(_) => unimplemented!(),
+            EntityType::Tag(ty) => EntityIndex::Tag(self.result.module.tags.push(ty)),
         }
     }
 
