@@ -56,6 +56,7 @@
 
 use crate::externref::VMExternRef;
 use crate::table::{Table, TableElementType};
+use crate::traphandlers::Exception;
 use crate::vmcontext::{VMContext, VMFuncRef};
 use crate::TrapReason;
 use anyhow::Result;
@@ -169,6 +170,16 @@ pub mod trampolines {
             match self {
                 Ok(t) => t,
                 Err(e) => crate::traphandlers::raise_trap(e.into()),
+            }
+        }
+    }
+
+    impl<T> LibcallResult for Result<T, crate::traphandlers::Exception> {
+        type Abi = T;
+        unsafe fn convert(self) -> T {
+            match self {
+                Ok(t) => t,
+                Err(e) => crate::traphandlers::raise_exception(e),
             }
         }
     }
@@ -494,6 +505,11 @@ unsafe fn memory_atomic_wait64(
     Ok(instance
         .get_runtime_memory(memory)
         .atomic_wait64(addr_index, expected, timeout)? as u32)
+}
+
+// Implementation of `throw` for locally defined memories.
+unsafe fn throw(vmctx: *mut VMContext) -> Result<(), Exception> {
+    Err(Exception)
 }
 
 // Hook for when an instance runs out of fuel.

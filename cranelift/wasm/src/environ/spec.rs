@@ -462,7 +462,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     ) -> WasmResult<ir::Value>;
 
     /// Translate a `throw` WebAssembly instruction.
-    fn translate_throw(&mut self, pos: FuncCursor, exception_data: ir::Value) -> WasmResult<()>;
+    fn translate_throw(&mut self, pos: FuncCursor, exception_data: &[ir::Value]) -> WasmResult<()>;
 
     /// Emit code at the beginning of every wasm loop.
     ///

@@ -659,9 +659,8 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     fn translate_throw(
         &mut self,
         mut pos: FuncCursor,
-        _exception_data: ir::Value,
+        _exception_data: &[ir::Value],
     ) -> WasmResult<()> {
-        pos.ins().trap(TrapCode::UnreachableCodeReached);
         Ok(())
     }
 }

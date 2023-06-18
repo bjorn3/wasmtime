@@ -153,6 +153,20 @@ pub unsafe fn raise_lib_trap(trap: wasmtime_environ::Trap) -> ! {
     raise_trap(TrapReason::Wasm(trap))
 }
 
+/// Raises a trap immediately.
+///
+/// This function performs as-if a wasm trap was just executed. This trap
+/// payload is then returned from `catch_traps` below.
+///
+/// # Safety
+///
+/// Only safe to call when wasm code is on the stack, aka `catch_traps` must
+/// have been previously called. Additionally no Rust destructors can be on the
+/// stack. They will be skipped and not executed.
+pub unsafe fn raise_exception(exception: Exception) -> ! {
+    tls::with(|info| info.unwrap().unwind_with(UnwindReason::Exception(exception)))
+}
+
 /// Carries a Rust panic across wasm code and resumes the panic on the other
 /// side.
 ///
@@ -244,6 +258,9 @@ impl From<wasmtime_environ::Trap> for TrapReason {
     }
 }
 
+// FIXME add exception data fields
+pub struct Exception;
+
 /// Catches any wasm traps that happen within the execution of `closure`,
 /// returning them as a `Result`.
 ///
@@ -272,6 +289,7 @@ where
         Ok(x) => Ok(x),
         Err((UnwindReason::Trap(reason), backtrace)) => Err(Box::new(Trap { reason, backtrace })),
         Err((UnwindReason::Panic(panic), _)) => std::panic::resume_unwind(panic),
+        Err((UnwindReason::Exception(Exception), _)) => unreachable!(),
     };
 
     extern "C" fn call_closure<F>(payload: *mut u8, caller: *mut VMContext)
@@ -376,9 +394,10 @@ mod call_thread_state {
 }
 pub use call_thread_state::*;
 
-enum UnwindReason {
+pub(crate) enum UnwindReason {
     Panic(Box<dyn Any + Send>),
     Trap(TrapReason),
+    Exception(Exception),
 }
 
 impl CallThreadState {
@@ -414,6 +433,11 @@ impl CallThreadState {
                 ..
             }) => None,
             UnwindReason::Trap(_) => self.capture_backtrace(self.limits, None),
+
+            UnwindReason::Exception(exception) => {
+                // FIXME use _Unwind_RaiseException instead for control over the exception data
+                std::panic::panic_any(exception);
+            }
         };
         unsafe {
             (*self.unwind.get()).as_mut_ptr().write((reason, backtrace));

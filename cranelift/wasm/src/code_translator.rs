@@ -87,7 +87,8 @@ use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    self, AtomicRmwOp, ConstantData, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
+    self, AtomicRmwOp, ConstantData, InstBuilder, JumpTableData, MemFlags, TrapCode, Value,
+    ValueLabel,
 };
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
@@ -451,6 +452,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder.seal_block(header)
             }
 
+            // FIXME codegen code to rethrow exception in catch_block in case of a try block
+
             frame.truncate_value_stack_to_original_size(&mut state.stack);
             state
                 .stack
@@ -600,18 +603,61 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (params, results) = blocktype_params_results(validator, *blockty)?;
             let next = block_with_params(builder, results.clone(), environ)?;
             let catch = builder.create_block();
-            builder.append_block_param(catch, environ.pointer_type());
             state.push_try(next, catch, params.len(), results.len());
         }
         Operator::Throw { tag_index } => {
+            // TODO handle exception tags
             //let arg_tys = environ.tags();
-            todo!();
+            let val_count = 0; // FIXME use the right count based on the exception tag
+            let vals = state.peekn(val_count);
+            environ.translate_throw(builder.cursor(), /* tag, */ vals)?;
+            builder.ins().trap(TrapCode::UnreachableCodeReached);
+            state.popn(val_count);
+            state.reachable = false;
         }
-        Operator::Catch { .. }
-        | Operator::Throw { .. }
-        | Operator::Rethrow { .. }
-        | Operator::Delegate { .. }
-        | Operator::CatchAll => {
+        Operator::Catch { .. } | Operator::CatchAll => {
+            state.reachable = true;
+
+            let frame = &mut state.control_stack.last_mut().unwrap();
+            // We signal that all the code that follows until the next End is unreachable
+            frame.set_branched_to_exit();
+            match frame {
+                ControlStackFrame::Try {
+                    destination,
+                    catch_block,
+                    num_param_values,
+                    num_return_values,
+                    original_stack_size,
+                    exit_is_branched_to,
+                } => {
+                    let destination = *destination;
+                    let cur_catch_block = *catch_block;
+                    let num_return_values = *num_return_values;
+
+                    *catch_block = builder.create_block();
+
+                    let destination_args = state.peekn_mut(num_return_values);
+                    canonicalise_then_jump(builder, destination, destination_args);
+                    state.popn(num_return_values);
+
+                    builder.switch_to_block(cur_catch_block);
+                    builder.seal_block(cur_catch_block);
+
+                    let exception_type =
+                        builder.append_block_param(cur_catch_block, environ.pointer_type());
+                    let exception_data =
+                        builder.append_block_param(cur_catch_block, environ.pointer_type());
+
+                    // FIXME check exception_type against the exception tag in case of catch and
+                    // jump to the next catch block if different.
+
+                    // FIXME destructure exception data according to the exception tag
+                    state.stack.extend_from_slice(&[exception_data]);
+                }
+                _ => unreachable!("{frame:?}"),
+            }
+        }
+        Operator::Rethrow { .. } | Operator::Delegate { .. } => {
             return Err(wasm_unsupported!(
                 "proposed exception handling operator {:?}",
                 op

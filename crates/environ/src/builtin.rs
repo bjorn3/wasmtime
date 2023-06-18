@@ -47,6 +47,8 @@ macro_rules! foreach_builtin_function {
             memory_atomic_wait32(vmctx: vmctx, memory: i32, addr: i64, expected: i32, timeout: i64) -> i32;
             /// Returns an index for wasm's `memory.atomic.wait64` instruction.
             memory_atomic_wait64(vmctx: vmctx, memory: i32, addr: i64, expected: i64, timeout: i64) -> i32;
+            /// Returns an index for wasm's `throw` instruction.
+            throw(vmctx: vmctx);
             /// Invoked when fuel has run out while executing a function.
             out_of_gas(vmctx: vmctx);
             /// Invoked when we reach a new epoch.

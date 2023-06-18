@@ -334,6 +334,7 @@ impl FuncTranslationState {
     }
 
     /// Pop one value.
+    #[track_caller]
     pub(crate) fn pop1(&mut self) -> Value {
         self.stack
             .pop()
@@ -341,6 +342,7 @@ impl FuncTranslationState {
     }
 
     /// Peek at the top of the stack without popping it.
+    #[track_caller]
     pub(crate) fn peek1(&self) -> Value {
         *self
             .stack
@@ -349,6 +351,7 @@ impl FuncTranslationState {
     }
 
     /// Pop two values. Return them in the order they were pushed.
+    #[track_caller]
     pub(crate) fn pop2(&mut self) -> (Value, Value) {
         let v2 = self.stack.pop().unwrap();
         let v1 = self.stack.pop().unwrap();
@@ -356,6 +359,7 @@ impl FuncTranslationState {
     }
 
     /// Pop three values. Return them in the order they were pushed.
+    #[track_caller]
     pub(crate) fn pop3(&mut self) -> (Value, Value, Value) {
         let v3 = self.stack.pop().unwrap();
         let v2 = self.stack.pop().unwrap();
@@ -366,6 +370,7 @@ impl FuncTranslationState {
     /// Helper to ensure the the stack size is at least as big as `n`; note that due to
     /// `debug_assert` this will not execute in non-optimized builds.
     #[inline]
+    #[track_caller]
     fn ensure_length_is_at_least(&self, n: usize) {
         debug_assert!(
             n <= self.stack.len(),
@@ -378,6 +383,7 @@ impl FuncTranslationState {
     /// Pop the top `n` values on the stack.
     ///
     /// The popped values are not returned. Use `peekn` to look at them before popping.
+    #[track_caller]
     pub(crate) fn popn(&mut self, n: usize) {
         self.ensure_length_is_at_least(n);
         let new_len = self.stack.len() - n;
@@ -385,12 +391,14 @@ impl FuncTranslationState {
     }
 
     /// Peek at the top `n` values on the stack in the order they were pushed.
+    #[track_caller]
     pub(crate) fn peekn(&self, n: usize) -> &[Value] {
         self.ensure_length_is_at_least(n);
         &self.stack[self.stack.len() - n..]
     }
 
     /// Peek at the top `n` values on the stack in the order they were pushed.
+    #[track_caller]
     pub(crate) fn peekn_mut(&mut self, n: usize) -> &mut [Value] {
         self.ensure_length_is_at_least(n);
         let len = self.stack.len();

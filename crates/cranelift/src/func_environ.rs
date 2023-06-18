@@ -2065,6 +2065,25 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 
+    fn translate_throw(
+        &mut self,
+        mut pos: FuncCursor,
+        exception_data: &[ir::Value],
+    ) -> WasmResult<()> {
+        let func_sig = self.builtin_function_signatures.throw(&mut pos.func);
+
+        let (vmctx, func_addr) =
+            self.translate_load_builtin_function_address(&mut pos, BuiltinFunctionIndex::throw());
+
+        pos.ins().call_indirect(
+            func_sig,
+            func_addr,
+            &[vmctx /* FIXME add args as necessary */],
+        );
+
+        Ok(())
+    }
+
     fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
         // Additionally if enabled check how much fuel we have remaining to see
         // if we've run out by this point.
