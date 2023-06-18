@@ -185,7 +185,7 @@ fn memory_ty(expected: &Memory, actual: &Memory, actual_runtime_size: Option<u64
 
 fn tag_ty(cx: &MatchCx<'_>, expected: &Tag, actual: &Tag) -> Result<()> {
     // TODO
-    cx.vmshared_signature_index(expected.sig, actual.sig)?;
+    //cx.vmshared_signature_index(expected.sig, actual.sig)?;
     Ok(())
 }
 

@@ -17,7 +17,7 @@ use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::{self, InstBuilder};
-use cranelift_codegen::ir::{types::*, UserFuncName};
+use cranelift_codegen::ir::{types::*, TrapCode, UserFuncName};
 use cranelift_codegen::isa::{CallConv, TargetFrontendConfig};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
@@ -654,6 +654,15 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _count: ir::Value,
     ) -> WasmResult<ir::Value> {
         Ok(pos.ins().iconst(I32, 0))
+    }
+
+    fn translate_throw(
+        &mut self,
+        mut pos: FuncCursor,
+        _exception_data: ir::Value,
+    ) -> WasmResult<()> {
+        pos.ins().trap(TrapCode::UnreachableCodeReached);
+        Ok(())
     }
 }
 

@@ -138,9 +138,10 @@ impl ControlStackFrame {
     }
     pub fn br_destination(&self) -> Block {
         match *self {
-            Self::If { destination, .. } | Self::Block { destination, .. } => destination,
+            Self::If { destination, .. }
+            | Self::Block { destination, .. }
+            | Self::Try { destination, .. } => destination,
             Self::Loop { header, .. } => header,
-            Self::Try { .. } => unreachable!("is this unreachable???"),
         }
     }
     /// Private helper. Use `truncate_value_stack_to_else_params()` or
