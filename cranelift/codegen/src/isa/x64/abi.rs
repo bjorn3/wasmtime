@@ -1,6 +1,7 @@
 //! Implementation of the standard x64 ABI.
 
-use crate::ir::{self, types, LibCall, MemFlags, Signature, TrapCode};
+use crate::ir::immediates::Imm64;
+use crate::ir::{self, types, LibCall, MemFlags, Signature, TrapCode, Type};
 use crate::ir::{types::*, ExternalName};
 use crate::isa;
 use crate::isa::{unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings, CallConv};
@@ -284,7 +285,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         ArgsOrRets::Rets => {
                             get_intreg_for_retval(&call_conv, flags, next_gpr, last_slot)
                         }
-                        ArgsOrRets::LandingpadArgs => todo!(),
+                        ArgsOrRets::LandingpadArgs => {
+                            assert!(call_conv == isa::CallConv::SystemV);
+                            get_intreg_for_retval(&call_conv, flags, next_gpr, last_slot)
+                        }
                     }
                 } else {
                     match args_or_rets {
@@ -292,7 +296,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                             get_fltreg_for_arg(&call_conv, next_vreg, next_param_idx)
                         }
                         ArgsOrRets::Rets => get_fltreg_for_retval(&call_conv, next_vreg, last_slot),
-                        ArgsOrRets::LandingpadArgs => todo!(),
+                        ArgsOrRets::LandingpadArgs => {
+                            panic!("Float not allowed as landingpad args");
+                        }
                     }
                 };
                 next_param_idx += 1;
@@ -594,7 +600,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         ));
         insts.push(Inst::CallKnown {
             dest: ExternalName::LibCall(LibCall::Probestack),
-            info: Some(Box::new(CallInfo {
+            info: Box::new(CallInfo {
                 // No need to include arg here: we are post-regalloc
                 // so no constraints will be seen anyway.
                 uses: smallvec![],
@@ -602,7 +608,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 clobbers: PRegSet::empty(),
                 callee_pop_size: 0,
                 callee_conv: CallConv::Probestack,
-            })),
+                id: None,
+                alternate_targets: smallvec![],
+            }),
         });
     }
 
@@ -807,6 +815,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         callee_conv: isa::CallConv,
         _caller_conv: isa::CallConv,
         callee_pop_size: u32,
+        id: Option<Imm64>,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
     ) -> SmallVec<[Self::I; 2]> {
         let mut insts = SmallVec::new();
         match dest {
@@ -818,6 +828,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     clobbers,
                     callee_pop_size,
                     callee_conv,
+                    id,
+                    alternate_targets,
                 ));
             }
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
@@ -834,6 +846,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     clobbers,
                     callee_pop_size,
                     callee_conv,
+                    id,
+                    alternate_targets,
                 ));
             }
             &CallDest::Reg(reg) => {
@@ -844,6 +858,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     clobbers,
                     callee_pop_size,
                     callee_conv,
+                    id,
+                    alternate_targets,
                 ));
             }
         }
@@ -895,6 +911,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             /* clobbers = */ Self::get_regs_clobbered_by_call(call_conv),
             callee_pop_size,
             call_conv,
+            /* id = */ None,
+            /* alternate_targets = */ smallvec![],
         ));
         insts
     }
@@ -1008,6 +1026,8 @@ impl X64CallSite {
             new_stack_arg_size,
             uses: self.take_uses(),
             tmp: ctx.temp_writable_gpr(),
+            id: None,
+            alternate_targets: smallvec![],
         });
         match dest {
             CallDest::ExtName(callee, RelocDistance::Near) => {

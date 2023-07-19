@@ -7,7 +7,7 @@ use generated_code::{Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, MergeableLoadSize};
-use crate::ir::LibCall;
+use crate::ir::{LibCall, JumpTable};
 use crate::isa::x64::lower::emit_vm_call;
 use crate::isa::x64::X64Backend;
 use crate::{
@@ -34,9 +34,10 @@ use std::boxed::Box;
 /// call instruction is also used by Winch to emit calls, but the
 /// `Box<CallInfo>` field is not used, it's only used by Cranelift. By making it
 /// optional, we reduce the number of heap allocations in Winch.
-type BoxCallInfo = Option<Box<CallInfo>>;
+type BoxCallInfo = Box<CallInfo>;
 type BoxReturnCallInfo = Box<ReturnCallInfo>;
 type VecArgPair = Vec<ArgPair>;
+type VecMachLabel = Vec<MachLabel>;
 
 pub struct SinkableLoad {
     inst: Inst,

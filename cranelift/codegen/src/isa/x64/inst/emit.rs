@@ -1612,20 +1612,18 @@ pub(crate) fn emit(
             // beginning of the immediate field.
             emit_reloc(sink, Reloc::X86CallPCRel4, &dest, -4);
             sink.put4(0);
-            sink.add_call_site();
+            sink.add_call_site(call_info.id, call_info.alternate_targets.clone());
 
             // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.
-            if let Some(call_info) = call_info {
-                if call_info.callee_pop_size > 0 {
-                    Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::Sub,
-                        RegMemImm::imm(call_info.callee_pop_size),
-                        Writable::from_reg(regs::rsp()),
-                    )
-                    .emit(sink, info, state);
-                }
+            if call_info.callee_pop_size > 0 {
+                Inst::alu_rmi_r(
+                    OperandSize::Size64,
+                    AluRmiROpcode::Sub,
+                    RegMemImm::imm(call_info.callee_pop_size),
+                    Writable::from_reg(regs::rsp()),
+                )
+                .emit(sink, info, state);
             }
         }
 
@@ -1645,7 +1643,7 @@ pub(crate) fn emit(
             // beginning of the immediate field.
             emit_reloc(sink, Reloc::X86CallPCRel4, &callee, -4);
             sink.put4(0);
-            sink.add_call_site();
+            sink.add_call_site(call_info.id, call_info.alternate_targets.clone());
         }
 
         Inst::ReturnCallUnknown {
@@ -1660,7 +1658,7 @@ pub(crate) fn emit(
                 target: RegMem::reg(callee),
             }
             .emit(sink, info, state);
-            sink.add_call_site();
+            sink.add_call_site(call_info.id, call_info.alternate_targets.clone());
         }
 
         Inst::CallUnknown {
@@ -1709,20 +1707,18 @@ pub(crate) fn emit(
                 sink.push_user_stack_map(state, offset, s);
             }
 
-            sink.add_call_site();
+            sink.add_call_site(call_info.id, call_info.alternate_targets.clone());
 
             // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.
-            if let Some(call_info) = call_info {
-                if call_info.callee_pop_size > 0 {
-                    Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::Sub,
-                        RegMemImm::imm(call_info.callee_pop_size),
-                        Writable::from_reg(regs::rsp()),
-                    )
-                    .emit(sink, info, state);
-                }
+            if call_info.callee_pop_size > 0 {
+                Inst::alu_rmi_r(
+                    OperandSize::Size64,
+                    AluRmiROpcode::Sub,
+                    RegMemImm::imm(call_info.callee_pop_size),
+                    Writable::from_reg(regs::rsp()),
+                )
+                .emit(sink, info, state);
             }
         }
 
