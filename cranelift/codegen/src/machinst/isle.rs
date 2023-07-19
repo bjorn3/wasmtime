@@ -736,7 +736,7 @@ macro_rules! isle_prelude_caller_methods {
             args @ (inputs, off): ValueSlice,
             id: Imm64,
             landingpads: &VecBlockCall,
-            targets: &VecMachLabel,
+            targets: &[MachLabel],
         ) -> VecInstOutput {
             let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
             let sig = &self.lower_ctx.dfg().signatures[sig_ref];
@@ -774,7 +774,7 @@ macro_rules! isle_prelude_caller_methods {
             args @ (inputs, off): ValueSlice,
             id: Imm64,
             landingpads: &VecBlockCall,
-            targets: &VecMachLabel,
+            targets: &[MachLabel],
         ) -> VecInstOutput {
             let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
             let ptr = self.put_in_reg(val);

@@ -1538,7 +1538,7 @@ pub(crate) fn emit(
             inst.emit(&[], sink, info, state);
         }
 
-        Inst::CallKnown { dest, .. } => {
+        Inst::CallKnown { dest, info } => {
             if let Some(s) = state.take_stack_map() {
                 sink.add_stack_map(StackMapExtent::UpcomingBytes(5), s);
             }
@@ -1547,10 +1547,10 @@ pub(crate) fn emit(
             // beginning of the immediate field.
             emit_reloc(sink, Reloc::X86CallPCRel4, &dest, -4);
             sink.put4(0);
-            sink.add_call_site();
+            sink.add_call_site(info.id, info.alternate_targets.clone());
         }
 
-        Inst::CallUnknown { dest, .. } => {
+        Inst::CallUnknown { dest, info } => {
             let dest = dest.with_allocs(allocs);
 
             let start_offset = sink.cur_offset();
@@ -1585,7 +1585,7 @@ pub(crate) fn emit(
             if let Some(s) = state.take_stack_map() {
                 sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
             }
-            sink.add_call_site();
+            sink.add_call_site(info.id, info.alternate_targets.clone());
         }
 
         Inst::Args { .. } => {}

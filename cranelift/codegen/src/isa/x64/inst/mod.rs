@@ -1,7 +1,8 @@
 //! This module defines x86_64-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
-use crate::ir::{types, ExternalName, LibCall, RelSourceLoc, TrapCode, Type};
+use crate::ir::immediates::Imm64;
+use crate::ir::{types, ExternalName, LibCall, RelSourceLoc, TrapCode, Type,};
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::{pretty_print_reg, show_ireg_sized};
 use crate::isa::x64::settings as x64_settings;
@@ -40,6 +41,11 @@ pub struct CallInfo {
     pub defs: CallRetList,
     /// Registers clobbered by this call, as per its calling convention.
     pub clobbers: PRegSet,
+    /// Id for this invoke. `None` for `call` instructions and synthetic calls.
+    // FIXME maybe distinguish synthetic calls and explicit call instructions?
+    pub id: Option<Imm64>,
+    /// Locations of the alternate targets for an `invoke` instruction.
+    pub alternate_targets: SmallVec<[MachLabel; 0]>,
 }
 
 #[test]
@@ -510,6 +516,8 @@ impl Inst {
         uses: CallArgList,
         defs: CallRetList,
         clobbers: PRegSet,
+        id: Option<Imm64>,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
     ) -> Inst {
         Inst::CallKnown {
             dest,
@@ -517,6 +525,8 @@ impl Inst {
                 uses,
                 defs,
                 clobbers,
+                id,
+                alternate_targets,
             }),
         }
     }
@@ -526,6 +536,8 @@ impl Inst {
         uses: CallArgList,
         defs: CallRetList,
         clobbers: PRegSet,
+        id: Option<Imm64>,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
     ) -> Inst {
         dest.assert_regclass_is(RegClass::Int);
         Inst::CallUnknown {
@@ -534,6 +546,8 @@ impl Inst {
                 uses,
                 defs,
                 clobbers,
+                id,
+                alternate_targets,
             }),
         }
     }

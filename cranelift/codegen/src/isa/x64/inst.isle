@@ -695,6 +695,9 @@
 (decl two_targets (MachLabel MachLabel) MachLabelSlice)
 (extern extractor two_targets two_targets)
 
+(decl branch_target (MachLabelSlice u8) MachLabel)
+(extern constructor branch_target branch_target)
+
 (decl targets_count (MachLabelSlice) u32)
 (extern constructor targets_count targets_count)
 
@@ -1876,10 +1879,10 @@
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
 
-(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice VecBlockCall VecMachLabel) VecInstOutput)
+(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice Imm64 VecBlockCall MachLabelSlice) VecInstOutput)
 (extern constructor gen_invoke gen_invoke)
 
-(decl gen_invoke_indirect (SigRef Value ValueSlice VecBlockCall VecMachLabel) VecInstOutput)
+(decl gen_invoke_indirect (SigRef Value ValueSlice Imm64 VecBlockCall MachLabelSlice) VecInstOutput)
 (extern constructor gen_invoke_indirect gen_invoke_indirect)
 
 ;;;; Helpers for Emitting Loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

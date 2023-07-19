@@ -178,7 +178,7 @@ fn emit_vm_call(
         retval_insts.extend(retval_inst.into_iter());
         outputs.push(retval_regs.only_reg().unwrap());
     }
-    abi.emit_call(ctx);
+    abi.emit_call(ctx, None, smallvec![]);
     for inst in retval_insts {
         ctx.emit(inst);
     }

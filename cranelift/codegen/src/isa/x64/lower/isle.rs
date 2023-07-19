@@ -687,6 +687,10 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
+    fn branch_target(&mut self, elements: &MachLabelSlice, idx: u8) -> MachLabel {
+        elements[idx as usize]
+    }
+
     fn targets_count(&mut self, elements: &MachLabelSlice) -> u32 {
         elements.len() as u32
     }
