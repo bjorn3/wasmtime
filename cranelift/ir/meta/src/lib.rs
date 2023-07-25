@@ -6,7 +6,6 @@ mod cdsl;
 mod srcgen;
 
 pub mod error;
-pub mod isa;
 
 mod gen_inst;
 mod gen_settings;
@@ -16,16 +15,10 @@ mod constant_hash;
 mod shared;
 mod unique_table;
 
-/// Generate an ISA from an architecture string (e.g. "x86_64").
-pub fn isa_from_arch(arch: &str) -> Result<isa::Isa, String> {
-    isa::Isa::from_arch(arch).ok_or_else(|| format!("no supported isa found for arch `{}`", arch))
-}
-
 /// Generates all the Rust source files used in Cranelift from the meta-language.
 pub fn generate(out_dir: &str, isle_dir: Option<&str>) -> Result<(), error::Error> {
-    // Create all the definitions:
-    // - common definitions.
-    let mut shared_defs = shared::define();
+    // Common definitions.
+    let shared_defs = shared::define();
 
     gen_settings::generate(
         &shared_defs.settings,
@@ -35,12 +28,8 @@ pub fn generate(out_dir: &str, isle_dir: Option<&str>) -> Result<(), error::Erro
     )?;
     gen_types::generate("types.rs", out_dir)?;
 
-    // At this point, all definitions are done.
-    let all_formats = shared_defs.verify_instruction_formats();
-
-    // Generate all the code.
     gen_inst::generate(
-        all_formats,
+        &shared_defs.all_formats,
         &shared_defs.all_instructions,
         "opcodes.rs",
         "inst_builder.rs",
@@ -49,6 +38,10 @@ pub fn generate(out_dir: &str, isle_dir: Option<&str>) -> Result<(), error::Erro
         out_dir,
         isle_dir,
     )?;
+
+    let mut fmt = srcgen::Formatter::new();
+    fmt.line(crate::constant_hash::SIMPLE_HASH_SOURCE);
+    fmt.update_file("constant_hash.rs", out_dir)?;
 
     Ok(())
 }
