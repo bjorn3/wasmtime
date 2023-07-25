@@ -5,8 +5,8 @@
 //!
 //! This module declares the data types used to represent external functions and call signatures.
 
+use crate::call_conv::CallConv;
 use crate::ir::{ExternalName, SigRef, Type};
-use crate::isa::CallConv;
 use alloc::vec::Vec;
 use core::fmt;
 use core::str::FromStr;

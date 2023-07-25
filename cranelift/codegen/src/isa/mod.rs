@@ -43,9 +43,9 @@
 //! The configured target ISA trait object is a `Box<TargetIsa>` which can be used for multiple
 //! concurrent function compilations.
 
-use crate::dominator_tree::DominatorTree;
-pub use crate::isa::call_conv::CallConv;
+pub use crate::call_conv::CallConv;
 
+use crate::dominator_tree::DominatorTree;
 use crate::flowgraph;
 use crate::ir::{self, Function, Type};
 #[cfg(feature = "unwind")]
@@ -75,8 +75,6 @@ pub mod riscv64;
 mod s390x;
 
 pub mod unwind;
-
-mod call_conv;
 
 /// Returns a builder that can create a corresponding `TargetIsa`
 /// or `Err(LookupError::SupportDisabled)` if not enabled.

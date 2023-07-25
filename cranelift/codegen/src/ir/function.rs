@@ -3,6 +3,7 @@
 //! The `Function` struct defined in this module owns all of its basic blocks and
 //! instructions.
 
+use crate::call_conv::CallConv;
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir::{
     self, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, DynamicStackSlots,
@@ -10,7 +11,6 @@ use crate::ir::{
     JumpTableData, Layout, Opcode, SigRef, Signature, SourceLocs, StackSlot, StackSlotData,
     StackSlots, Table, TableData, Type,
 };
-use crate::isa::CallConv;
 use crate::write::write_function;
 use crate::HashMap;
 #[cfg(feature = "enable-serde")]

@@ -99,6 +99,7 @@ pub use crate::machinst::{
 
 mod alias_analysis;
 mod bitset;
+mod call_conv;
 mod constant_hash;
 mod context;
 mod ctxhash;

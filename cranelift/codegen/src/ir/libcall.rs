@@ -1,8 +1,8 @@
 //! Naming well-known routines in the runtime library.
 
 use crate::{
+    call_conv::CallConv,
     ir::{types, AbiParam, ExternalName, FuncRef, Function, Signature, Type},
-    isa::CallConv,
 };
 use core::fmt;
 use core::str::FromStr;

@@ -1668,7 +1668,7 @@ mod tests {
         use crate::ir::InstBuilder;
 
         let mut func = Function::new();
-        let mut sig = Signature::new(crate::isa::CallConv::SystemV);
+        let mut sig = Signature::new(crate::call_conv::CallConv::SystemV);
         sig.params.push(ir::AbiParam::new(types::I32));
         let sig = func.import_signature(sig);
         let block0 = func.dfg.make_block();
