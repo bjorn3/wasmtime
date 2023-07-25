@@ -678,6 +678,7 @@ dependencies = [
  "cranelift-codegen-meta",
  "cranelift-control",
  "cranelift-entity",
+ "cranelift-ir",
  "cranelift-isle",
  "criterion",
  "gimli",
@@ -776,6 +777,36 @@ dependencies = [
  "smallvec",
  "thiserror",
 ]
+
+[[package]]
+name = "cranelift-ir"
+version = "0.99.0"
+dependencies = [
+ "cranelift-bforest",
+ "cranelift-entity",
+ "cranelift-ir-meta",
+ "cranelift-ir-shared",
+ "cranelift-isle",
+ "gimli",
+ "hashbrown 0.13.2",
+ "log",
+ "serde",
+ "similar",
+ "smallvec",
+ "souper-ir",
+ "target-lexicon",
+]
+
+[[package]]
+name = "cranelift-ir-meta"
+version = "0.99.0"
+dependencies = [
+ "cranelift-ir-shared",
+]
+
+[[package]]
+name = "cranelift-ir-shared"
+version = "0.99.0"
 
 [[package]]
 name = "cranelift-isle"

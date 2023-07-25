@@ -165,6 +165,7 @@ cranelift-entity = { path = "cranelift/entity", version = "0.99.0" }
 cranelift-native = { path = "cranelift/native", version = "0.99.0" }
 cranelift-module = { path = "cranelift/module", version = "0.99.0" }
 cranelift-interpreter = { path = "cranelift/interpreter", version = "0.99.0" }
+cranelift-ir = { path = "cranelift/ir", version = "0.99.0" }
 cranelift-reader = { path = "cranelift/reader", version = "0.99.0" }
 cranelift-filetests = { path = "cranelift/filetests" }
 cranelift-object = { path = "cranelift/object", version = "0.99.0" }

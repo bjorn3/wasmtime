@@ -1,0 +1,16 @@
+[package]
+name = "cranelift-ir-meta"
+authors = ["The Cranelift Project Developers"]
+version = "0.99.0"
+description = "Metaprogram for cranelift-ir"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition.workspace = true
+
+# FIXME(rust-lang/cargo#9300): uncomment once that lands
+# [package.metadata.docs.rs]
+# rustdoc-args = [ "--document-private-items" ]
+
+[dependencies]
+cranelift-ir-shared = { path = "../shared", version = "0.99.0" }
