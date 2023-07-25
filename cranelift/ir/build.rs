@@ -28,7 +28,7 @@ fn main() {
 
     println!("cargo:rerun-if-changed=build.rs");
 
-    if let Err(err) = meta::generate(&out_dir, None) {
+    if let Err(err) = meta::generate_ir(&out_dir) {
         eprintln!("Error: {}", err);
         process::exit(1);
     }

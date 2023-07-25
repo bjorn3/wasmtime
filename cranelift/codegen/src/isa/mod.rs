@@ -43,7 +43,7 @@
 //! The configured target ISA trait object is a `Box<TargetIsa>` which can be used for multiple
 //! concurrent function compilations.
 
-pub use crate::call_conv::CallConv;
+pub use cranelift_ir::call_conv::CallConv;
 
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph;

@@ -66,6 +66,8 @@ pub use crate::write::write_function;
 pub use cranelift_bforest as bforest;
 pub use cranelift_control as control;
 pub use cranelift_entity as entity;
+pub use cranelift_ir::ir;
+pub use cranelift_ir::settings;
 #[cfg(feature = "unwind")]
 pub use gimli;
 
@@ -79,11 +81,9 @@ pub mod data_value;
 pub mod dbg;
 pub mod dominator_tree;
 pub mod flowgraph;
-pub mod ir;
 pub mod isa;
 pub mod loop_analysis;
 pub mod print_errors;
-pub mod settings;
 pub mod timing;
 pub mod verifier;
 pub mod write;
@@ -99,8 +99,6 @@ pub use crate::machinst::{
 
 mod alias_analysis;
 mod bitset;
-mod call_conv;
-mod constant_hash;
 mod context;
 mod ctxhash;
 mod dce;

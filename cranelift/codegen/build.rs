@@ -14,7 +14,7 @@
 // The build script expects to be run from the directory where this build.rs file lives. The
 // current directory is used to find the sources.
 
-use cranelift_codegen_meta as meta;
+use cranelift_ir_meta as meta;
 use cranelift_isle::error::Errors;
 
 use std::env;
@@ -74,11 +74,6 @@ fn main() {
             ));
             std::process::exit(1);
         }
-    }
-
-    if let Err(err) = meta::generate_ir(&out_dir) {
-        eprintln!("Error: {}", err);
-        process::exit(1);
     }
 
     if let Err(err) = meta::generate_codegen(&isas, &out_dir, isle_dir.to_str().unwrap()) {

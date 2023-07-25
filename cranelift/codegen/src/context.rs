@@ -22,7 +22,6 @@ use crate::machinst::{CompiledCode, CompiledCodeStencil};
 use crate::nan_canonicalization::do_nan_canonicalization;
 use crate::remove_constant_phis::do_remove_constant_phis;
 use crate::result::{CodegenResult, CompileResult};
-use crate::settings::{FlagsOrIsa, OptLevel};
 use crate::trace;
 use crate::unreachable_code::eliminate_unreachable_code;
 use crate::verifier::{verify_context, VerifierErrors, VerifierResult};
@@ -31,6 +30,7 @@ use crate::{timing, CompileError};
 use alloc::string::String;
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
+use cranelift_ir::settings::{FlagsOrIsa, OptLevel};
 
 #[cfg(feature = "souper-harvest")]
 use crate::souper_harvest::do_souper_harvest;

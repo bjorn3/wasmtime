@@ -5,6 +5,7 @@
 
 pub mod formats;
 pub mod instructions;
+pub mod isa;
 pub mod operands;
 pub mod settings;
 pub mod types;

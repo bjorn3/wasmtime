@@ -675,10 +675,10 @@ dependencies = [
  "bumpalo",
  "capstone",
  "cranelift-bforest",
- "cranelift-codegen-meta",
  "cranelift-control",
  "cranelift-entity",
  "cranelift-ir",
+ "cranelift-ir-meta",
  "cranelift-isle",
  "criterion",
  "gimli",
@@ -692,10 +692,6 @@ dependencies = [
  "souper-ir",
  "target-lexicon",
 ]
-
-[[package]]
-name = "cranelift-codegen-meta"
-version = "0.99.0"
 
 [[package]]
 name = "cranelift-control"
