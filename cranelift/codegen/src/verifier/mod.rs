@@ -367,7 +367,8 @@ impl<'a> Verifier<'a> {
                             format!("iadd_imm global value with non-int type {}", global_type),
                         ));
                     } else if let Some(isa) = self.isa {
-                        let base_type = self.func.global_values[base].global_type(isa);
+                        let base_type =
+                            self.func.global_values[base].global_type(isa.pointer_type());
                         if global_type != base_type {
                             errors.report((
                                 gv,
@@ -381,7 +382,8 @@ impl<'a> Verifier<'a> {
                 }
                 ir::GlobalValueData::Load { base, .. } => {
                     if let Some(isa) = self.isa {
-                        let base_type = self.func.global_values[base].global_type(isa);
+                        let base_type =
+                            self.func.global_values[base].global_type(isa.pointer_type());
                         let pointer_type = isa.pointer_type();
                         if base_type != pointer_type {
                             errors.report((
@@ -411,7 +413,7 @@ impl<'a> Verifier<'a> {
                 }
 
                 let pointer_type = isa.pointer_type();
-                let base_type = self.func.global_values[base].global_type(isa);
+                let base_type = self.func.global_values[base].global_type(isa.pointer_type());
                 if base_type != pointer_type {
                     errors.report((
                         table,
@@ -429,7 +431,7 @@ impl<'a> Verifier<'a> {
                 }
 
                 let index_type = table_data.index_type;
-                let bound_type = self.func.global_values[bound_gv].global_type(isa);
+                let bound_type = self.func.global_values[bound_gv].global_type(isa.pointer_type());
                 if index_type != bound_type {
                     errors.report((
                         table,
@@ -1499,7 +1501,8 @@ impl<'a> Verifier<'a> {
             ir::InstructionData::UnaryGlobalValue { global_value, .. } => {
                 if let Some(isa) = self.isa {
                     let inst_type = self.func.dfg.value_type(self.func.dfg.first_result(inst));
-                    let global_type = self.func.global_values[global_value].global_type(isa);
+                    let global_type =
+                        self.func.global_values[global_value].global_type(isa.pointer_type());
                     if inst_type != global_type {
                         return errors.nonfatal((
                             inst, self.context(inst),

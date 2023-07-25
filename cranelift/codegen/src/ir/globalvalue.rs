@@ -2,7 +2,6 @@
 
 use crate::ir::immediates::{Imm64, Offset32};
 use crate::ir::{ExternalName, GlobalValue, Type};
-use crate::isa::TargetIsa;
 use core::fmt;
 
 #[cfg(feature = "enable-serde")]
@@ -94,11 +93,11 @@ impl GlobalValueData {
     }
 
     /// Return the type of this global.
-    pub fn global_type(&self, isa: &dyn TargetIsa) -> Type {
+    pub fn global_type(&self, pointer_type: Type) -> Type {
         match *self {
-            Self::VMContext { .. } | Self::Symbol { .. } => isa.pointer_type(),
+            Self::VMContext { .. } | Self::Symbol { .. } => pointer_type,
             Self::IAddImm { global_type, .. } | Self::Load { global_type, .. } => global_type,
-            Self::DynScaleTargetConst { .. } => isa.pointer_type(),
+            Self::DynScaleTargetConst { .. } => pointer_type,
         }
     }
 }
