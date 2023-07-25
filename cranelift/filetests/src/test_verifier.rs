@@ -49,7 +49,7 @@ impl SubTest for TestVerifier {
             }
         }
 
-        match verify_function(func, context.flags_or_isa()) {
+        match verify_function(func, context.isa) {
             Ok(()) if expected.is_empty() => Ok(()),
             Ok(()) => anyhow::bail!("passed, but expected errors: {:?}", expected),
 

@@ -5,7 +5,7 @@ use crate::subtest::SubTest;
 use anyhow::{bail, Context as _, Result};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_verifier_error;
-use cranelift_codegen::settings::{Flags, FlagsOrIsa};
+use cranelift_codegen::settings::Flags;
 use cranelift_codegen::timing;
 use cranelift_codegen::verify_function;
 use cranelift_reader::{parse_test, IsaSpec, Location, ParseOptions, TestFile};
@@ -95,8 +95,7 @@ pub fn run(
     for (test, flags, isa) in &tuples {
         // Should we run the verifier before this test?
         if test.needs_verifier() {
-            let fisa = FlagsOrIsa { flags, isa: *isa };
-            verify_testfile(&testfile, fisa)?;
+            verify_testfile(&testfile, *isa)?;
         }
 
         test.run_target(&testfile, &mut file_update, file_path.as_ref(), flags, *isa)?;
@@ -106,9 +105,9 @@ pub fn run(
 }
 
 // Verifies all functions in a testfile
-fn verify_testfile(testfile: &TestFile, fisa: FlagsOrIsa) -> anyhow::Result<()> {
+fn verify_testfile(testfile: &TestFile, isa: Option<&dyn TargetIsa>) -> anyhow::Result<()> {
     for (func, _) in &testfile.functions {
-        verify_function(func, fisa)
+        verify_function(func, isa)
             .map_err(|errors| anyhow::anyhow!("{}", pretty_verifier_error(&func, None, errors)))?;
     }
 

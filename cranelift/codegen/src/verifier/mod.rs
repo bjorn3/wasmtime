@@ -71,7 +71,6 @@ use crate::ir::{
 use crate::isa::TargetIsa;
 use crate::iterators::IteratorExtras;
 use crate::print_errors::pretty_verifier_error;
-use crate::settings::FlagsOrIsa;
 use crate::timing;
 use alloc::collections::BTreeSet;
 use alloc::string::{String, ToString};
@@ -254,13 +253,13 @@ impl Display for VerifierErrors {
 }
 
 /// Verify `func`.
-pub fn verify_function<'a, FOI: Into<FlagsOrIsa<'a>>>(
+pub fn verify_function<'a, I: Into<Option<&'a dyn TargetIsa>>>(
     func: &Function,
-    fisa: FOI,
+    isa: I,
 ) -> VerifierResult<()> {
     let _tt = timing::verifier();
     let mut errors = VerifierErrors::default();
-    let verifier = Verifier::new(func, fisa.into());
+    let verifier = Verifier::new(func, isa.into());
     let result = verifier.run(&mut errors);
     if errors.is_empty() {
         result.unwrap();
@@ -272,15 +271,15 @@ pub fn verify_function<'a, FOI: Into<FlagsOrIsa<'a>>>(
 
 /// Verify `func` after checking the integrity of associated context data structures `cfg` and
 /// `domtree`.
-pub fn verify_context<'a, FOI: Into<FlagsOrIsa<'a>>>(
+pub fn verify_context<'a, I: Into<Option<&'a dyn TargetIsa>>>(
     func: &Function,
     cfg: &ControlFlowGraph,
     domtree: &DominatorTree,
-    fisa: FOI,
+    isa: I,
     errors: &mut VerifierErrors,
 ) -> VerifierStepResult<()> {
     let _tt = timing::verifier();
-    let verifier = Verifier::new(func, fisa.into());
+    let verifier = Verifier::new(func, isa.into());
     if cfg.is_valid() {
         verifier.cfg_integrity(cfg, errors)?;
     }
@@ -298,14 +297,14 @@ struct Verifier<'a> {
 }
 
 impl<'a> Verifier<'a> {
-    pub fn new(func: &'a Function, fisa: FlagsOrIsa<'a>) -> Self {
+    pub fn new(func: &'a Function, isa: Option<&'a dyn TargetIsa>) -> Self {
         let expected_cfg = ControlFlowGraph::with_function(func);
         let expected_domtree = DominatorTree::with_function(func, &expected_cfg);
         Self {
             func,
             expected_cfg,
             expected_domtree,
-            isa: fisa.isa,
+            isa,
         }
     }
 

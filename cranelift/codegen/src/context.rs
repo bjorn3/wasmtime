@@ -239,7 +239,13 @@ impl Context {
     /// Also check that the dominator tree and control flow graph are consistent with the function.
     pub fn verify<'a, FOI: Into<FlagsOrIsa<'a>>>(&self, fisa: FOI) -> VerifierResult<()> {
         let mut errors = VerifierErrors::default();
-        let _ = verify_context(&self.func, &self.cfg, &self.domtree, fisa, &mut errors);
+        let _ = verify_context(
+            &self.func,
+            &self.cfg,
+            &self.domtree,
+            fisa.into().isa,
+            &mut errors,
+        );
 
         if errors.is_empty() {
             Ok(())
