@@ -76,7 +76,12 @@ fn main() {
         }
     }
 
-    if let Err(err) = meta::generate(&isas, &out_dir, isle_dir.to_str().unwrap()) {
+    if let Err(err) = meta::generate_ir(&out_dir) {
+        eprintln!("Error: {}", err);
+        process::exit(1);
+    }
+
+    if let Err(err) = meta::generate_codegen(&isas, &out_dir, isle_dir.to_str().unwrap()) {
         eprintln!("Error: {}", err);
         process::exit(1);
     }

@@ -21,8 +21,8 @@ pub fn isa_from_arch(arch: &str) -> Result<isa::Isa, String> {
     isa::Isa::from_arch(arch).ok_or_else(|| format!("no supported isa found for arch `{}`", arch))
 }
 
-/// Generates all the Rust source files used in Cranelift from the meta-language.
-pub fn generate(isas: &[isa::Isa], out_dir: &str, isle_dir: &str) -> Result<(), error::Error> {
+/// Generates all the Rust source files used in the IR part of  Cranelift from the meta-language.
+pub fn generate_ir(out_dir: &str) -> Result<(), error::Error> {
     // Common definitions.
     let shared_defs = shared::define();
 
@@ -39,15 +39,33 @@ pub fn generate(isas: &[isa::Isa], out_dir: &str, isle_dir: &str) -> Result<(), 
         &shared_defs.all_instructions,
         "opcodes.rs",
         "inst_builder.rs",
-        "clif_opt.isle",
-        "clif_lower.isle",
         out_dir,
-        isle_dir,
     )?;
 
     let mut fmt = srcgen::Formatter::new();
     fmt.line(crate::constant_hash::SIMPLE_HASH_SOURCE);
     fmt.update_file("constant_hash.rs", out_dir)?;
+
+    Ok(())
+}
+
+/// Generates all the Rust ISLE source files used in the codegen part of Cranelift from the
+/// meta-language.
+pub fn generate_codegen(
+    isas: &[isa::Isa],
+    out_dir: &str,
+    isle_dir: &str,
+) -> Result<(), error::Error> {
+    // Common definitions.
+    let shared_defs = shared::define();
+
+    gen_inst::generate_isle(
+        &shared_defs.all_formats,
+        &shared_defs.all_instructions,
+        "clif_opt.isle",
+        "clif_lower.isle",
+        isle_dir,
+    )?;
 
     // Per ISA definitions.
     for isa in isa::define(isas) {

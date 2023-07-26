@@ -1747,10 +1747,7 @@ pub(crate) fn generate(
     all_inst: &AllInstructions,
     opcode_filename: &str,
     inst_builder_filename: &str,
-    isle_opt_filename: &str,
-    isle_lower_filename: &str,
     out_dir: &str,
-    isle_dir: &str,
 ) -> Result<(), error::Error> {
     // Opcodes.
     let mut fmt = Formatter::new();
@@ -1764,6 +1761,21 @@ pub(crate) fn generate(
     gen_type_constraints(all_inst, &mut fmt);
     fmt.update_file(opcode_filename, out_dir)?;
 
+    // Instruction builder.
+    let mut fmt = Formatter::new();
+    gen_builder(all_inst, &formats, &mut fmt);
+    fmt.update_file(inst_builder_filename, out_dir)?;
+
+    Ok(())
+}
+
+pub(crate) fn generate_isle(
+    formats: &[Rc<InstructionFormat>],
+    all_inst: &AllInstructions,
+    isle_opt_filename: &str,
+    isle_lower_filename: &str,
+    isle_dir: &str,
+) -> Result<(), error::Error> {
     // ISLE DSL: mid-end ("opt") generated bindings.
     let mut fmt = Formatter::new();
     gen_opt_isle(&formats, all_inst, &mut fmt);
@@ -1773,11 +1785,6 @@ pub(crate) fn generate(
     let mut fmt = Formatter::new();
     gen_lower_isle(&formats, all_inst, &mut fmt);
     fmt.update_file(isle_lower_filename, isle_dir)?;
-
-    // Instruction builder.
-    let mut fmt = Formatter::new();
-    gen_builder(all_inst, &formats, &mut fmt);
-    fmt.update_file(inst_builder_filename, out_dir)?;
 
     Ok(())
 }
