@@ -1033,6 +1033,7 @@
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
 (type CodeOffset (primitive CodeOffset))
 (type VecMachLabel extern (enum))
+(type MachLabelSlice extern (enum))
 
 (type ExtendOp extern
   (enum
@@ -1684,19 +1685,19 @@
 (decl u64_into_imm_logic (Type u64) ImmLogic)
 (extern constructor u64_into_imm_logic u64_into_imm_logic)
 
-(decl branch_target (VecMachLabel u8) BranchTarget)
+(decl branch_target (MachLabelSlice u8) BranchTarget)
 (extern constructor branch_target branch_target)
 
-(decl targets_count (VecMachLabel) u32)
+(decl targets_count (MachLabelSlice) u32)
 (extern constructor targets_count targets_count)
 
-(decl targets_jt_size (VecMachLabel) u32)
+(decl targets_jt_size (MachLabelSlice) u32)
 (extern constructor targets_jt_size targets_jt_size)
 
-(decl targets_jt_space (VecMachLabel) CodeOffset)
+(decl targets_jt_space (MachLabelSlice) CodeOffset)
 (extern constructor targets_jt_space targets_jt_space)
 
-(decl targets_jt_info (VecMachLabel) BoxJTSequenceInfo)
+(decl targets_jt_info (MachLabelSlice) BoxJTSequenceInfo)
 (extern constructor targets_jt_info targets_jt_info)
 
 ;; Calculate the minimum floating-point bound for a conversion to floating
@@ -3524,10 +3525,10 @@
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
 
-(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice Imm64 VecBlockCall VecMachLabel) VecInstOutput)
+(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice Imm64 VecBlockCall MachLabelSlice) VecInstOutput)
 (extern constructor gen_invoke gen_invoke)
 
-(decl gen_invoke_indirect (SigRef Value ValueSlice Imm64 VecBlockCall VecMachLabel) VecInstOutput)
+(decl gen_invoke_indirect (SigRef Value ValueSlice Imm64 VecBlockCall MachLabelSlice) VecInstOutput)
 (extern constructor gen_invoke_indirect gen_invoke_indirect)
 
 ;; Helpers for pinned register manipulation.
@@ -3973,7 +3974,7 @@
        (MInst.EmitIsland needed_space)))
 
 ;; Helper for emitting `br_table` sequences.
-(decl br_table_impl (u64 Reg VecMachLabel) Unit)
+(decl br_table_impl (u64 Reg MachLabelSlice) Unit)
 (rule (br_table_impl (imm12_from_u64 jt_size) ridx targets)
       (let ((jt_info BoxJTSequenceInfo (targets_jt_info targets)))
        (emit_side_effect (with_flags_side_effect
