@@ -168,7 +168,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         }
                         ArgsOrRets::LandingpadArgs => {
                             assert!(call_conv == isa::CallConv::SystemV);
-                            get_intreg_for_arg(&call_conv, next_gpr, next_param_idx)
+                            get_intreg_for_retval(&call_conv, next_gpr, next_param_idx)
                         }
                     }
                 } else {
