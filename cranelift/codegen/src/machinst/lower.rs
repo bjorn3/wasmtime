@@ -175,7 +175,7 @@ pub struct Lower<'func, I: VCodeInst> {
     vcode: VCodeBuilder<I>,
 
     /// VReg allocation context, given to the vcode field at build time to finalize the vcode.
-    vregs: VRegAllocator<I>,
+    pub vregs: VRegAllocator<I>,
 
     /// Mapping from `Value` (SSA value in IR) to virtual register.
     value_regs: SecondaryMap<Value, ValueRegs<Reg>>,

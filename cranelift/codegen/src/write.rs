@@ -461,28 +461,32 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         Invoke {
             func_ref,
             ref args,
+            imm,
             table,
             ..
         } => write!(
             w,
-            " {}({}), {}",
+            " {}({}), {}, {}",
             func_ref,
             DisplayValues(args.as_slice(pool)),
+            imm,
             jump_tables[table].display(pool),
         ),
         InvokeIndirect {
             sig_ref,
             ref args,
+            imm,
             table,
             ..
         } => {
             let args = args.as_slice(pool);
             write!(
                 w,
-                " {}, {}({}), {}",
+                " {}, {}({}), {}, {}",
                 sig_ref,
                 args[0],
                 DisplayValues(&args[1..]),
+                imm,
                 jump_tables[table].display(pool),
             )
         }

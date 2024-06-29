@@ -949,7 +949,7 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
     mut caller: CallSite<M>,
     args: ValueSlice,
     id: Imm64,
-    targets: &[MachLabel],
+    alternate_targets: &[MachLabel],
     landingpads: &VecBlockCall,
 ) -> VecInstOutput {
     gen_call_common_args(ctx, &mut caller, args);
@@ -958,7 +958,8 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
     // constraints are on the call instruction; but buffer the
     // instructions till after the call.
     let mut outputs = vec![InstOutput::new()];
-    for _ in 1..targets.len() {
+    outputs.push(InstOutput::new());
+    for _ in 0..alternate_targets.len() - 1 {
         outputs.push(InstOutput::new());
     }
     let mut retval_insts: crate::machinst::abi::SmallInstVec<_> = smallvec::smallvec![];
@@ -972,7 +973,7 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
         outputs[0].push(retval_regs);
     }
 
-    assert_eq!(landingpads.len(), targets.len() - 1);
+    assert_eq!(landingpads.len(), alternate_targets.len());
     log::info!("landingpads: {landingpads:?}");
     let landingpad_arg_counts = landingpads
         .iter()
@@ -1008,7 +1009,7 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
     }
     log::info!("{outputs:?}");
 
-    caller.emit_call(ctx, Some(id), targets[1..].iter().copied().collect());
+    caller.emit_call(ctx, Some(id), alternate_targets.iter().copied().collect());
 
     for inst in retval_insts {
         ctx.emit(inst);

@@ -2359,10 +2359,14 @@ impl<M: ABIMachineSpec> CallSite<M> {
                         // and we ignore high bits in our own registers by convention.
                         &ABIArgSlot::Reg { reg, ty, .. } => {
                             let into_reg = ctx.alloc_tmp(ty).only_reg().unwrap();
-                            self.defs.push(CallRetPair {
-                                vreg: into_reg,
-                                preg: reg.into(),
-                            });
+                            if let Some(def) = self.defs.iter().find(|def| def.preg == reg.into()) {
+                                ctx.vregs.set_vreg_alias(into_reg.to_reg(), def.vreg.to_reg());
+                            } else {
+                                self.defs.push(CallRetPair {
+                                    vreg: into_reg,
+                                    preg: reg.into(),
+                                });
+                            }
                             into_regs.push(into_reg.to_reg());
                         }
                         &ABIArgSlot::Stack { offset, ty, .. } => {

@@ -3091,11 +3091,12 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::RPar, "expected ')' after arguments")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
 
+                let imm = self.match_imm64("expected immediate")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+
                 let block_num = self.match_block("expected branch destination block")?;
                 let default_args = self.parse_opt_value_list()?;
                 let destination = ctx.function.dfg.block_call(block_num, &default_args);
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let imm = self.match_imm64("expected immediate")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let table = self.parse_jump_table(ctx, destination)?;
 
@@ -3116,12 +3117,13 @@ impl<'a> Parser<'a> {
                 let args = self.parse_value_list()?;
                 self.match_token(Token::RPar, "expected ')' after arguments")?;
 
+                let imm = self.match_imm64("expected immediate")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let block_num = self.match_block("expected branch destination block")?;
                 let default_args = self.parse_opt_value_list()?;
                 let destination = ctx.function.dfg.block_call(block_num, &default_args);
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let imm = self.match_imm64("expected immediate")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let table = self.parse_jump_table(ctx, destination)?;
 
