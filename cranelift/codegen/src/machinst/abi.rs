@@ -562,6 +562,15 @@ pub trait ABIMachineSpec {
     /// temporary register to use to synthesize the called address, if needed.
     fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Self::I; 2]>;
 
+    /// Generate an invoke instruction/sequence. This method is provided one
+    /// temporary register to use to synthesize the called address, if needed.
+    fn gen_invoke(
+        dest: &CallDest,
+        tmp: Writable<Reg>,
+        default: MachLabel,
+        info: CallInfo<()>,
+    ) -> SmallVec<[Self::I; 2]>;
+
     /// Generate a memcpy invocation. Used to set up struct
     /// args. Takes `src`, `dst` as read-only inputs and passes a temporary
     /// allocator.
@@ -2497,6 +2506,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
         ctx: &mut Lower<M::I>,
         id: Option<Imm64>,
         alternate_targets: SmallVec<[MachLabel; 0]>,
+        invoke: Option<MachLabel>,
     ) {
         let word_type = M::word_type();
         if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg {
@@ -2556,21 +2566,40 @@ impl<M: ABIMachineSpec> CallSite<M> {
             "{dest:?}({uses:?}) -> ({defs:?}) clobbers {clobbers:?}",
             dest = self.dest,
         );
-        for inst in M::gen_call(
-            &self.dest,
-            tmp,
-            CallInfo {
-                dest: (),
-                uses,
-                defs,
-                clobbers,
-                callee_conv: call_conv,
-                caller_conv: self.caller_conv,
-                callee_pop_size,
-                id,
-                alternate_targets,
-            },
-        )
+        for inst in if let Some(default) = invoke {
+            M::gen_invoke(
+                &self.dest,
+                tmp,
+                default,
+                CallInfo {
+                    dest: (),
+                    uses,
+                    defs,
+                    clobbers,
+                    callee_conv: call_conv,
+                    caller_conv: self.caller_conv,
+                    callee_pop_size,
+                    id,
+                    alternate_targets,
+                },
+            )
+        } else {
+            M::gen_call(
+                &self.dest,
+                tmp,
+                CallInfo {
+                    dest: (),
+                    uses,
+                    defs,
+                    clobbers,
+                    callee_conv: call_conv,
+                    caller_conv: self.caller_conv,
+                    callee_pop_size,
+                    id,
+                    alternate_targets,
+                },
+            )
+        }
         .into_iter()
         {
             ctx.emit(inst);

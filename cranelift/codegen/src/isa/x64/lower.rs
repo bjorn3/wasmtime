@@ -186,7 +186,7 @@ fn emit_vm_call(
         outputs.push(retval_regs.only_reg().unwrap());
     }
 
-    abi.emit_call(ctx, None, smallvec![]);
+    abi.emit_call(ctx, None, smallvec![], None);
 
     Ok(outputs)
 }

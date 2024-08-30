@@ -1633,6 +1633,37 @@ pub(crate) fn emit(
             );
         }
 
+        Inst::InvokeKnown {
+            info: call_info,
+            default,
+        } => {
+            if let Some(s) = state.take_stack_map() {
+                let offset = sink.cur_offset() + 5;
+                sink.push_user_stack_map(state, offset, s);
+            }
+
+            sink.put1(0xE8);
+            // The addend adjusts for the difference between the end of the instruction and the
+            // beginning of the immediate field.
+            emit_reloc(sink, Reloc::X86CallPCRel4, &call_info.dest, -4);
+            sink.put4(0);
+            sink.add_call_site(call_info.id, call_info.alternate_targets.clone());
+
+            // Reclaim the outgoing argument area that was released by the callee, to ensure that
+            // StackAMode values are always computed from a consistent SP.
+            if call_info.callee_pop_size > 0 {
+                Inst::alu_rmi_r(
+                    OperandSize::Size64,
+                    AluRmiROpcode::Sub,
+                    RegMemImm::imm(call_info.callee_pop_size),
+                    Writable::from_reg(regs::rsp()),
+                )
+                .emit(sink, info, state);
+            }
+
+            Inst::jmp_known(*default).emit(sink, info, state);
+        }
+
         Inst::ReturnCallKnown { info: call_info } => {
             emit_return_call_common_sequence(sink, info, state, &call_info);
 
@@ -1659,6 +1690,62 @@ pub(crate) fn emit(
             }
             .emit(sink, info, state);
             sink.add_call_site(call_info.id, call_info.alternate_targets.clone());
+        }
+
+        Inst::InvokeUnknown {
+            info: call_info,
+            default,
+        } => {
+            let dest = call_info.dest.clone();
+
+            match dest {
+                RegMem::Reg { reg } => {
+                    let reg_enc = int_reg_enc(reg);
+                    emit_std_enc_enc(
+                        sink,
+                        LegacyPrefixes::None,
+                        0xFF,
+                        1,
+                        2, /*subopcode*/
+                        reg_enc,
+                        RexFlags::clear_w(),
+                    );
+                }
+
+                RegMem::Mem { addr } => {
+                    let addr = &addr.finalize(state.frame_layout(), sink);
+                    emit_std_enc_mem(
+                        sink,
+                        LegacyPrefixes::None,
+                        0xFF,
+                        1,
+                        2, /*subopcode*/
+                        addr,
+                        RexFlags::clear_w(),
+                        0,
+                    );
+                }
+            }
+
+            if let Some(s) = state.take_stack_map() {
+                let offset = sink.cur_offset();
+                sink.push_user_stack_map(state, offset, s);
+            }
+
+            sink.add_call_site(call_info.id, call_info.alternate_targets.clone());
+
+            // Reclaim the outgoing argument area that was released by the callee, to ensure that
+            // StackAMode values are always computed from a consistent SP.
+            if call_info.callee_pop_size > 0 {
+                Inst::alu_rmi_r(
+                    OperandSize::Size64,
+                    AluRmiROpcode::Sub,
+                    RegMemImm::imm(call_info.callee_pop_size),
+                    Writable::from_reg(regs::rsp()),
+                )
+                .emit(sink, info, state);
+            }
+            Inst::jmp_known(*default).emit(sink, info, state);
         }
 
         Inst::CallUnknown {

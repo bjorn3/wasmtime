@@ -3590,18 +3590,10 @@
 ;;;; Rules for invokes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower_branch (invoke (func_ref_data sig_ref extname dist) inputs id jump_table) (jump_table_targets default alternate_targets))
-      (let ((results VecInstOutput
-                  (gen_invoke sig_ref extname dist inputs id (landingpads jump_table) alternate_targets))
-            ; FIXME move into gen_invoke
-            (_ Unit (emit_side_effect (jmp_known default))))
-        results))
+      (gen_invoke sig_ref extname dist inputs id (landingpads jump_table) default alternate_targets))
 
 (rule (lower_branch (invoke_indirect sig_ref val inputs id jump_table) (jump_table_targets default alternate_targets))
-      (let ((results VecInstOutput
-                  (gen_invoke_indirect sig_ref val inputs id (landingpads jump_table) alternate_targets))
-            ; FIXME move into gen_invoke_indirect
-            (_ Unit (emit_side_effect (jmp_known default))))
-        results))
+      (gen_invoke_indirect sig_ref val inputs id (landingpads jump_table) default alternate_targets))
 
 ;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

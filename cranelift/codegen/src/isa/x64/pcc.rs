@@ -826,6 +826,7 @@ pub(crate) fn check(
         }
 
         Inst::CallKnown { .. }
+        | Inst::InvokeKnown { .. }
         | Inst::ReturnCallKnown { .. }
         | Inst::JmpKnown { .. }
         | Inst::Ret { .. }
@@ -841,13 +842,15 @@ pub(crate) fn check(
 
         Inst::ReturnCallUnknown { .. } => Ok(()),
 
-        Inst::CallUnknown { ref info } => match <&RegMem>::from(&info.dest) {
-            RegMem::Mem { addr } => {
-                check_load(ctx, None, addr, vcode, I64, 64)?;
-                Ok(())
+        Inst::CallUnknown { ref info } | Inst::InvokeUnknown { ref info, .. } => {
+            match <&RegMem>::from(&info.dest) {
+                RegMem::Mem { addr } => {
+                    check_load(ctx, None, addr, vcode, I64, 64)?;
+                    Ok(())
+                }
+                RegMem::Reg { .. } => Ok(()),
             }
-            RegMem::Reg { .. } => Ok(()),
-        },
+        }
         Inst::JmpUnknown {
             target: ref dest, ..
         } => match <&RegMem>::from(dest) {
