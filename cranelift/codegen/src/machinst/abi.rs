@@ -557,6 +557,23 @@ pub trait ABIMachineSpec {
         alternate_targets: SmallVec<[MachLabel; 0]>,
     ) -> SmallVec<[Self::I; 2]>;
 
+    /// Generate an invoke instruction/sequence. This method is provided one
+    /// temporary register to use to synthesize the called address, if needed.
+    fn gen_invoke(
+        dest: &CallDest,
+        uses: CallArgList,
+        defs: CallRetList,
+        clobbers: PRegSet,
+        tmp: Writable<Reg>,
+        callee_conv: isa::CallConv,
+        caller_conv: isa::CallConv,
+        callee_pop_size: u32,
+        id: Option<Imm64>,
+        default: MachLabel,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
+        retval_insts: SmallVec<[Self::I; 4]>,
+    ) -> SmallVec<[Self::I; 2]>;
+
     /// Generate a memcpy invocation. Used to set up struct
     /// args. Takes `src`, `dst` as read-only inputs and passes a temporary
     /// allocator.
@@ -2332,7 +2349,8 @@ impl<M: ABIMachineSpec> CallSite<M> {
                         &ABIArgSlot::Reg { reg, ty, .. } => {
                             let into_reg = ctx.alloc_tmp(ty).only_reg().unwrap();
                             if let Some(def) = self.defs.iter().find(|def| def.preg == reg.into()) {
-                                ctx.vregs.set_vreg_alias(into_reg.to_reg(), def.vreg.to_reg());
+                                ctx.vregs
+                                    .set_vreg_alias(into_reg.to_reg(), def.vreg.to_reg());
                             } else {
                                 self.defs.push(CallRetPair {
                                     vreg: into_reg,
@@ -2380,6 +2398,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
         ctx: &mut Lower<M::I>,
         id: Option<Imm64>,
         alternate_targets: SmallVec<[MachLabel; 0]>,
+        invoke: Option<(MachLabel, SmallVec<[M::I; 4]>)>,
     ) {
         let word_type = M::word_type();
         if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg {
@@ -2437,18 +2456,35 @@ impl<M: ABIMachineSpec> CallSite<M> {
             "{dest:?}({uses:?}) -> ({defs:?}) clobbers {clobbers:?}",
             dest = self.dest,
         );
-        for inst in M::gen_call(
-            &self.dest,
-            uses,
-            defs,
-            clobbers,
-            tmp,
-            call_conv,
-            self.caller_conv,
-            callee_pop_size,
-            id,
-            alternate_targets,
-        )
+        for inst in if let Some((default, retval_insts)) = invoke {
+            M::gen_invoke(
+                &self.dest,
+                uses,
+                defs,
+                clobbers,
+                tmp,
+                call_conv,
+                self.caller_conv,
+                callee_pop_size,
+                id,
+                default,
+                alternate_targets,
+                retval_insts,
+            )
+        } else {
+            M::gen_call(
+                &self.dest,
+                uses,
+                defs,
+                clobbers,
+                tmp,
+                call_conv,
+                self.caller_conv,
+                callee_pop_size,
+                id,
+                alternate_targets,
+            )
+        }
         .into_iter()
         {
             ctx.emit(inst);

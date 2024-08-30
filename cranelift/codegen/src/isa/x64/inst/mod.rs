@@ -104,6 +104,8 @@ impl Inst {
             | Inst::Bswap { .. }
             | Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
+            | Inst::InvokeKnown { .. }
+            | Inst::InvokeUnknown { .. }
             | Inst::ReturnCallKnown { .. }
             | Inst::ReturnCallUnknown { .. }
             | Inst::CheckedSRemSeq { .. }
@@ -596,6 +598,63 @@ impl Inst {
                 id,
                 alternate_targets,
             }),
+        }
+    }
+
+    pub(crate) fn invoke_known(
+        dest: ExternalName,
+        uses: CallArgList,
+        defs: CallRetList,
+        clobbers: PRegSet,
+        callee_pop_size: u32,
+        callee_conv: CallConv,
+        id: Option<Imm64>,
+        default: MachLabel,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
+        retval_insts: SmallVec<[Inst; 4]>,
+    ) -> Inst {
+        Inst::InvokeKnown {
+            dest,
+            info: Box::new(CallInfo {
+                uses,
+                defs,
+                clobbers,
+                callee_pop_size,
+                callee_conv,
+                id,
+                alternate_targets,
+            }),
+            default,
+            retval_insts: Box::new(retval_insts.into_vec()),
+        }
+    }
+
+    pub(crate) fn invoke_unknown(
+        dest: RegMem,
+        uses: CallArgList,
+        defs: CallRetList,
+        clobbers: PRegSet,
+        callee_pop_size: u32,
+        callee_conv: CallConv,
+        id: Option<Imm64>,
+        default: MachLabel,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
+        retval_insts: SmallVec<[Inst; 4]>,
+    ) -> Inst {
+        dest.assert_regclass_is(RegClass::Int);
+        Inst::InvokeUnknown {
+            dest,
+            info: Box::new(CallInfo {
+                uses,
+                defs,
+                clobbers,
+                callee_pop_size,
+                callee_conv,
+                id,
+                alternate_targets,
+            }),
+            default,
+            retval_insts: Box::new(retval_insts.into_vec()),
         }
     }
 
@@ -1691,6 +1750,42 @@ impl PrettyPrint for Inst {
                 format!("{op} *{dest}")
             }
 
+            Inst::InvokeKnown {
+                dest,
+                retval_insts,
+                default,
+                info,
+                ..
+            } => {
+                let call_op = ljustify("call".to_string());
+                let mut s = format!("{call_op} {dest:?} {info:?}");
+                for inst in &**retval_insts {
+                    write!(&mut s, "; {}", inst.pretty_print(_size)).unwrap();
+                }
+                let jmp_ = ljustify("jmp".to_string());
+                let dst = default.to_string();
+                write!(&mut s, "; {jmp_} {dst}").unwrap();
+                s
+            }
+
+            Inst::InvokeUnknown {
+                dest,
+                retval_insts,
+                default,
+                ..
+            } => {
+                let dest = dest.pretty_print(8);
+                let call_op = ljustify("call".to_string());
+                let mut s = format!("{call_op} *{dest}");
+                for inst in &**retval_insts {
+                    write!(&mut s, "; {}", inst.pretty_print(_size)).unwrap();
+                }
+                let jmp_ = ljustify("jmp".to_string());
+                let dst = default.to_string();
+                write!(&mut s, "; {jmp_} {dst}").unwrap();
+                s
+            }
+
             Inst::ReturnCallKnown { callee, info } => {
                 let ReturnCallInfo {
                     uses,
@@ -2362,7 +2457,9 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(tmp);
         }
 
-        Inst::CallKnown { dest, info, .. } => {
+        Inst::CallKnown { dest, info, .. } | Inst::InvokeKnown { dest, info, .. } => {
+            // FIXME is it ok to ignore retval_insts?
+
             // Probestack is special and is only inserted after
             // regalloc, so we do not need to represent its ABI to the
             // register allocator. Assert that we don't alter that
@@ -2383,7 +2480,9 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_clobbers(*clobbers);
         }
 
-        Inst::CallUnknown { info, dest, .. } => {
+        Inst::CallUnknown { info, dest, .. } | Inst::InvokeUnknown { info, dest, .. } => {
+            // FIXME is it ok to ignore retval_insts?
+
             let CallInfo {
                 uses,
                 defs,
@@ -2631,9 +2730,10 @@ impl MachInst for Inst {
         match self {
             // Interesting cases.
             &Self::Rets { .. } => MachTerminator::Ret,
-            &Self::ReturnCallKnown { .. } | &Self::ReturnCallUnknown { .. } => {
-                MachTerminator::RetCall
-            }
+            &Self::InvokeKnown { .. }
+            | &Self::InvokeUnknown { .. }
+            | &Self::ReturnCallKnown { .. }
+            | &Self::ReturnCallUnknown { .. } => MachTerminator::RetCall,
             &Self::JmpKnown { .. } => MachTerminator::Uncond,
             &Self::JmpCond { .. } => MachTerminator::Cond,
             &Self::JmpTableSeq { .. } => MachTerminator::Indirect,

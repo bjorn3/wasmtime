@@ -892,6 +892,75 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
+    /// Generate an invoke instruction/sequence.
+    fn gen_invoke(
+        dest: &CallDest,
+        uses: CallArgList,
+        defs: CallRetList,
+        clobbers: PRegSet,
+        tmp: Writable<Reg>,
+        callee_conv: isa::CallConv,
+        _caller_conv: isa::CallConv,
+        callee_pop_size: u32,
+        id: Option<Imm64>,
+        default: MachLabel,
+        alternate_targets: SmallVec<[MachLabel; 0]>,
+        retval_insts: SmallVec<[Self::I; 4]>,
+    ) -> SmallVec<[Self::I; 2]> {
+        let mut insts = SmallVec::new();
+        match dest {
+            &CallDest::ExtName(ref name, RelocDistance::Near) => {
+                insts.push(Inst::invoke_known(
+                    name.clone(),
+                    uses,
+                    defs,
+                    clobbers,
+                    callee_pop_size,
+                    callee_conv,
+                    id,
+                    default,
+                    alternate_targets,
+                    retval_insts,
+                ));
+            }
+            &CallDest::ExtName(ref name, RelocDistance::Far) => {
+                insts.push(Inst::LoadExtName {
+                    dst: tmp,
+                    name: Box::new(name.clone()),
+                    offset: 0,
+                    distance: RelocDistance::Far,
+                });
+                insts.push(Inst::invoke_unknown(
+                    RegMem::reg(tmp.to_reg()),
+                    uses,
+                    defs,
+                    clobbers,
+                    callee_pop_size,
+                    callee_conv,
+                    id,
+                    default,
+                    alternate_targets,
+                    retval_insts,
+                ));
+            }
+            &CallDest::Reg(reg) => {
+                insts.push(Inst::invoke_unknown(
+                    RegMem::reg(reg),
+                    uses,
+                    defs,
+                    clobbers,
+                    callee_pop_size,
+                    callee_conv,
+                    id,
+                    default,
+                    alternate_targets,
+                    retval_insts,
+                ));
+            }
+        }
+        insts
+    }
+
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,

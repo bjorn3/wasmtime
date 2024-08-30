@@ -50,7 +50,7 @@ rustc-hash  = { workspace = true }
 regalloc2 = { workspace = true, features = ["trace-log"] }
 
 [features]
-default = ["disas", "cranelift-codegen/arm64", "cranelift-codegen/x86", "cranelift-codegen/trace-log", "souper-harvest"]
+default = ["disas", "cranelift-codegen/x86", "cranelift-codegen/trace-log", "souper-harvest"]
 disas = ["capstone"]
 souper-harvest = ["cranelift-codegen/souper-harvest", "rayon"]
 all-arch = ["cranelift-codegen/all-arch"]

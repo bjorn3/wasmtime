@@ -829,6 +829,7 @@ pub(crate) fn check(
         }
 
         Inst::CallKnown { .. }
+        | Inst::InvokeKnown { .. }
         | Inst::ReturnCallKnown { .. }
         | Inst::JmpKnown { .. }
         | Inst::Ret { .. }
@@ -844,6 +845,7 @@ pub(crate) fn check(
         Inst::ReturnCallUnknown { .. } => Ok(()),
 
         Inst::CallUnknown { ref dest, .. }
+        | Inst::InvokeUnknown { ref dest, .. }
         | Inst::JmpUnknown {
             target: ref dest, ..
         } => match <&RegMem>::from(dest) {
