@@ -981,8 +981,7 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
     // constraints are on the call instruction; but buffer the
     // instructions till after the call.
     let mut outputs = vec![InstOutput::new()];
-    outputs.push(InstOutput::new());
-    for _ in 0..alternate_targets.len() - 1 {
+    for _ in 0..alternate_targets.len() {
         outputs.push(InstOutput::new());
     }
     let mut retval_insts: crate::machinst::abi::SmallInstVec<_> = smallvec::smallvec![];
