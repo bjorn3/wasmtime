@@ -1,0 +1,14 @@
+test compile
+target x86_64
+
+function u0:0() system_v {
+    sig0 = () -> i64 system_v
+    fn0 = colocated u0:1 sig0
+
+block0:
+    v0 = iconst.i64 0
+    invoke fn0(), 0, block1, []
+
+block1(v1: i64):
+    trap user0
+}

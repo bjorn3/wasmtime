@@ -84,6 +84,8 @@ impl Inst {
             | Inst::Bswap { .. }
             | Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
+            | Inst::InvokeKnown { .. }
+            | Inst::InvokeUnknown { .. }
             | Inst::ReturnCallKnown { .. }
             | Inst::ReturnCallUnknown { .. }
             | Inst::CheckedSRemSeq { .. }
@@ -543,6 +545,31 @@ impl Inst {
     pub(crate) fn call_unknown(info: Box<CallInfo<RegMem>>) -> Inst {
         info.dest.assert_regclass_is(RegClass::Int);
         Inst::CallUnknown { info }
+    }
+
+    pub(crate) fn invoke_known(
+        default: MachLabel,
+        retval_insts: SmallVec<[Inst; 4]>,
+        info: Box<CallInfo<ExternalName>>,
+    ) -> Inst {
+        Inst::InvokeKnown {
+            info,
+            default,
+            retval_insts: Box::new(retval_insts.into_vec()),
+        }
+    }
+
+    pub(crate) fn invoke_unknown(
+        default: MachLabel,
+        retval_insts: SmallVec<[Inst; 4]>,
+        info: Box<CallInfo<RegMem>>,
+    ) -> Inst {
+        info.dest.assert_regclass_is(RegClass::Int);
+        Inst::InvokeUnknown {
+            info,
+            default,
+            retval_insts: Box::new(retval_insts.into_vec()),
+        }
     }
 
     pub(crate) fn ret(stack_bytes_to_pop: u32) -> Inst {
@@ -1657,6 +1684,39 @@ impl PrettyPrint for Inst {
                 format!("{op} *{dest}")
             }
 
+            Inst::InvokeKnown {
+                retval_insts,
+                default,
+                info,
+            } => {
+                let call_op = ljustify("call".to_string());
+                let mut s = format!("{call_op} {:?} {info:?}", info.dest);
+                for inst in &**retval_insts {
+                    write!(&mut s, "; {}", inst.pretty_print(_size)).unwrap();
+                }
+                let jmp_ = ljustify("jmp".to_string());
+                let dst = default.to_string();
+                write!(&mut s, "; {jmp_} {dst}").unwrap();
+                s
+            }
+
+            Inst::InvokeUnknown {
+                retval_insts,
+                default,
+                info,
+            } => {
+                let dest = info.dest.pretty_print(8);
+                let call_op = ljustify("call".to_string());
+                let mut s = format!("{call_op} *{dest}");
+                for inst in &**retval_insts {
+                    write!(&mut s, "; {}", inst.pretty_print(_size)).unwrap();
+                }
+                let jmp_ = ljustify("jmp".to_string());
+                let dst = default.to_string();
+                write!(&mut s, "; {jmp_} {dst}").unwrap();
+                s
+            }
+
             Inst::ReturnCallKnown { info } => {
                 let ReturnCallInfo {
                     uses,
@@ -2400,7 +2460,9 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(tmp);
         }
 
-        Inst::CallKnown { info } => {
+        Inst::CallKnown { info } | Inst::InvokeKnown { info, .. } => {
+            // FIXME is it ok to ignore retval_insts?
+
             // Probestack is special and is only inserted after
             // regalloc, so we do not need to represent its ABI to the
             // register allocator. Assert that we don't alter that
@@ -2422,7 +2484,9 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_clobbers(*clobbers);
         }
 
-        Inst::CallUnknown { info } => {
+        Inst::CallUnknown { info } | Inst::InvokeUnknown { info, .. } => {
+            // FIXME is it ok to ignore retval_insts?
+
             let CallInfo {
                 uses,
                 defs,
@@ -2730,9 +2794,10 @@ impl MachInst for Inst {
         match self {
             // Interesting cases.
             &Self::Rets { .. } => MachTerminator::Ret,
-            &Self::ReturnCallKnown { .. } | &Self::ReturnCallUnknown { .. } => {
-                MachTerminator::RetCall
-            }
+            &Self::InvokeKnown { .. }
+            | &Self::InvokeUnknown { .. }
+            | &Self::ReturnCallKnown { .. }
+            | &Self::ReturnCallUnknown { .. } => MachTerminator::RetCall,
             &Self::JmpKnown { .. } => MachTerminator::Uncond,
             &Self::JmpCond { .. } => MachTerminator::Cond,
             &Self::JmpTableSeq { .. } => MachTerminator::Indirect,

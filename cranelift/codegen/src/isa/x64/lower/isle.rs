@@ -41,6 +41,7 @@ type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type VecArgPair = Vec<ArgPair>;
 type BoxSyntheticAmode = Box<SyntheticAmode>;
 type VecMachLabel = Vec<MachLabel>;
+type BoxVecInst = Box<Vec<MInst>>;
 
 pub struct SinkableLoad {
     inst: Inst,

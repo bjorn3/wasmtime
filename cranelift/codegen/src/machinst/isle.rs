@@ -881,6 +881,7 @@ macro_rules! isle_prelude_caller_methods {
             args @ (inputs, off): ValueSlice,
             id: Imm64,
             landingpads: &VecBlockCall,
+            default: MachLabel,
             targets: &Box<VecMachLabel>,
         ) -> VecInstOutput {
             let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
@@ -907,6 +908,7 @@ macro_rules! isle_prelude_caller_methods {
                 caller,
                 args,
                 id,
+                default,
                 targets,
                 landingpads,
             )
@@ -919,6 +921,7 @@ macro_rules! isle_prelude_caller_methods {
             args @ (inputs, off): ValueSlice,
             id: Imm64,
             landingpads: &VecBlockCall,
+            default: MachLabel,
             targets: &Box<VecMachLabel>,
         ) -> VecInstOutput {
             let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
@@ -945,6 +948,7 @@ macro_rules! isle_prelude_caller_methods {
                 caller,
                 args,
                 id,
+                default,
                 targets,
                 landingpads,
             )
@@ -996,7 +1000,7 @@ pub fn gen_call_common<M: ABIMachineSpec>(
         outputs.push(retval_regs);
     }
 
-    caller.emit_call(ctx, None, smallvec::smallvec![]);
+    caller.emit_call(ctx, None, smallvec::smallvec![], None);
 
     for inst in retval_insts {
         ctx.emit(inst);
@@ -1011,6 +1015,7 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
     mut caller: CallSite<M>,
     args: ValueSlice,
     id: Imm64,
+    default: MachLabel,
     alternate_targets: &[MachLabel],
     landingpads: &VecBlockCall,
 ) -> VecInstOutput {
@@ -1070,16 +1075,12 @@ pub fn gen_invoke_common<M: ABIMachineSpec>(
     }
     log::info!("{outputs:?}");
 
-    caller.emit_call(ctx, Some(id), alternate_targets.iter().copied().collect());
-
-    for inst in retval_insts {
-        ctx.emit(inst);
-    }
-
-    // FIXME move jump to default target from backends to here
-    // FIXME merge the call and jump into a single instruction to prevent regalloc from
-    //       putting any moves for landingpads after the call.
-    // FIXME all backends except aarch64 miss this jump
+    caller.emit_call(
+        ctx,
+        Some(id),
+        alternate_targets.iter().copied().collect(),
+        Some((default, retval_insts)),
+    );
 
     outputs
 }
