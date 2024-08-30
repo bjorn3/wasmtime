@@ -551,6 +551,16 @@
        ;; Tail call to an indirect destination.
        (ReturnCallUnknown (info BoxReturnCallIndInfo))
 
+       ;; Direct invoke: call simm32; <retval_insts>; jmp simm32
+       (InvokeKnown (info BoxCallInfo)
+                    (retval_insts BoxVecInst)
+                    (default MachLabel))
+
+       ;; Indirect invoke: callq (reg mem); <retval_insts>; jmp simm32
+       (InvokeUnknown (info BoxCallIndInfo)
+                      (retval_insts BoxVecInst)
+                      (default MachLabel))
+
        ;; A pseudo-instruction that captures register arguments in vregs.
        (Args
         (args VecArgPair))
@@ -1634,6 +1644,8 @@
 (decl targets_count (MachLabelSlice) u32)
 (extern constructor targets_count targets_count)
 
+(type BoxVecInst (primitive BoxVecInst))
+
 ;; Convert an `Imm8Reg` into an `Imm8Gpr`.
 (decl imm8_reg_to_imm8_gpr (Imm8Reg) Imm8Gpr)
 (extern constructor imm8_reg_to_imm8_gpr imm8_reg_to_imm8_gpr)
@@ -2480,10 +2492,10 @@
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
 
-(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice Imm64 VecBlockCall BoxVecMachLabel) VecInstOutput)
+(decl gen_invoke (SigRef ExternalName RelocDistance ValueSlice Imm64 VecBlockCall MachLabel BoxVecMachLabel) VecInstOutput)
 (extern constructor gen_invoke gen_invoke)
 
-(decl gen_invoke_indirect (SigRef Value ValueSlice Imm64 VecBlockCall BoxVecMachLabel) VecInstOutput)
+(decl gen_invoke_indirect (SigRef Value ValueSlice Imm64 VecBlockCall MachLabel BoxVecMachLabel) VecInstOutput)
 (extern constructor gen_invoke_indirect gen_invoke_indirect)
 
 ;;;; Helpers for emitting stack switches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

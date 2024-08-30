@@ -40,6 +40,7 @@ type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type VecArgPair = Vec<ArgPair>;
 type BoxSyntheticAmode = Box<SyntheticAmode>;
 type VecMachLabel = Vec<MachLabel>;
+type BoxVecInst = Box<Vec<MInst>>;
 
 /// When interacting with the external assembler (see `external.rs`), we
 /// need to fix the types we'll use.

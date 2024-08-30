@@ -841,6 +841,38 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
+    /// Generate an invoke instruction/sequence.
+    fn gen_invoke(
+        dest: &CallDest,
+        tmp: Writable<Reg>,
+        default: MachLabel,
+        retval_insts: SmallVec<[Self::I; 4]>,
+        info: CallInfo<()>,
+    ) -> SmallVec<[Self::I; 2]> {
+        let mut insts = SmallVec::new();
+        match dest {
+            &CallDest::ExtName(ref name, RelocDistance::Near) => {
+                let info = Box::new(info.map(|()| name.clone()));
+                insts.push(Inst::invoke_known(default, retval_insts, info));
+            }
+            &CallDest::ExtName(ref name, RelocDistance::Far) => {
+                insts.push(Inst::LoadExtName {
+                    dst: tmp,
+                    name: Box::new(name.clone()),
+                    offset: 0,
+                    distance: RelocDistance::Far,
+                });
+                let info = Box::new(info.map(|()| RegMem::reg(tmp.to_reg())));
+                insts.push(Inst::invoke_unknown(default, retval_insts, info));
+            }
+            &CallDest::Reg(reg) => {
+                let info = Box::new(info.map(|()| RegMem::reg(reg)));
+                insts.push(Inst::invoke_unknown(default, retval_insts, info));
+            }
+        }
+        insts
+    }
+
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
