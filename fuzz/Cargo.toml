@@ -15,7 +15,7 @@ cargo-fuzz = true
 anyhow = { workspace = true }
 env_logger = { workspace = true }
 cranelift-assembler-x64 = { workspace = true, features = ["fuzz"] }
-cranelift-codegen = { workspace = true, features = ["incremental-cache", "x86", "arm64", "s390x", "riscv64"] }
+cranelift-codegen = { workspace = true, features = ["x86", "arm64"] }
 cranelift-reader = { workspace = true }
 cranelift-filetests = { workspace = true }
 cranelift-interpreter = { workspace = true }
@@ -41,7 +41,7 @@ quote = { workspace = true }
 wasmtime-test-util = { workspace = true, features = ['component-fuzz'] }
 
 [features]
-default = ['fuzz-spec-interpreter']
+default = []
 fuzz-spec-interpreter = ['wasmtime-fuzzing/fuzz-spec-interpreter']
 chaos = ["cranelift-control/chaos"]
 
