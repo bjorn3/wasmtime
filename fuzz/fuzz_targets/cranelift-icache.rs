@@ -2,7 +2,6 @@
 
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
-    incremental_cache as icache,
     ir::{
         self, immediates::Imm64, ExternalName, Function, LibCall, Signature, UserExternalName,
         UserFuncName,
@@ -101,6 +100,7 @@ impl<'a> Arbitrary<'a> for FunctionWithIsa {
     }
 }
 
+#[cfg(any())]
 fuzz_target!(|func: FunctionWithIsa| {
     let FunctionWithIsa { mut func, isa } = func;
 

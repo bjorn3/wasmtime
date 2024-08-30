@@ -9,15 +9,16 @@ use cranelift::codegen::ir::instructions::{InstructionFormat, ResolvedConstraint
 use cranelift::codegen::ir::stackslot::StackSize;
 
 use cranelift::codegen::ir::{
-    types::*, AliasRegion, AtomicRmwOp, Block, ConstantData, Endianness, ExternalName, FuncRef,
-    Function, LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName, UserFuncName, Value,
+    types::*, AliasRegion, AtomicRmwOp, Block, BlockCall, ConstantData, Endianness, ExternalName,
+    FuncRef, Function, LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName,
+    UserFuncName, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
 use cranelift::prelude::isa::OwnedTargetIsa;
 use cranelift::prelude::{
-    EntityRef, ExtFuncData, FloatCC, InstBuilder, IntCC, JumpTableData, MemFlags, StackSlotData,
-    StackSlotKind,
+    EntityRef, ExtFuncData, FloatCC, Imm64, InstBuilder, IntCC, JumpTableData, MemFlags,
+    StackSlotData, StackSlotKind,
 };
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -121,6 +122,63 @@ fn insert_call(
     let (sig, sig_ref, func_ref) = fgen.u.choose(&fgen.resources.func_refs)?.clone();
 
     insert_call_to_function(fgen, builder, opcode, &sig, sig_ref, func_ref)
+}
+
+fn insert_invoke_to_function(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    call_opcode: Opcode,
+    sig: &Signature,
+    sig_ref: SigRef,
+    func_ref: FuncRef,
+    id: Imm64,
+    target: Block,
+    alternatives: &[Block],
+) -> Result<()> {
+    let actuals = fgen.generate_values_for_signature(
+        builder,
+        sig.params.iter().map(|abi_param| abi_param.value_type),
+    )?;
+
+    let addr_ty = fgen.isa.pointer_type();
+    let jump_table_data = JumpTableData::new(
+        BlockCall::new(
+            target,
+            &fgen.generate_values_for_block(builder, target)?,
+            &mut builder.func.dfg.value_lists,
+        ),
+        &alternatives
+            .into_iter()
+            .map(|&block| -> Result<_> {
+                Ok(BlockCall::new(
+                    block,
+                    &fgen.generate_values_for_block(builder, block)?,
+                    &mut builder.func.dfg.value_lists,
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+    );
+    let jump_table = builder.func.dfg.jump_tables.push(jump_table_data);
+    let call = match call_opcode {
+        Opcode::Invoke => builder.ins().invoke(func_ref, &actuals, id, jump_table),
+        Opcode::InvokeIndirect => {
+            let addr = builder.ins().func_addr(addr_ty, func_ref);
+            builder
+                .ins()
+                .invoke_indirect(sig_ref, addr, &actuals, id, jump_table)
+        }
+        _ => unreachable!(),
+    };
+
+    // Assign the return values to random variables
+    let ret_values = builder.inst_results(call).to_vec();
+    let ret_types = sig.returns.iter().map(|p| p.value_type);
+    for (ty, val) in ret_types.zip(ret_values) {
+        let var = fgen.get_variable_of_type(ty)?;
+        builder.def_var(var, val);
+    }
+
+    Ok(())
 }
 
 fn insert_stack_load(
@@ -1135,6 +1193,8 @@ enum BlockTerminator {
     Switch(Type, Block, HashMap<u128, Block>),
     TailCall(FuncRef),
     TailCallIndirect(FuncRef),
+    Invoke(FuncRef, Imm64, Block, Vec<Block>),
+    InvokeIndirect(FuncRef, Imm64, Block, Vec<Block>),
 }
 
 #[derive(Debug, Clone)]
@@ -1478,7 +1538,6 @@ where
         let terminator = self.resources.block_terminators[source_block.as_u32() as usize].clone();
 
         match terminator {
-            // FIXME add invoke and invoke_indirect
             BlockTerminator::Return => {
                 let types: Vec<Type> = {
                     let rets = &builder.func.signature.returns;
@@ -1546,6 +1605,34 @@ where
                 };
 
                 insert_call_to_function(self, builder, opcode, &sig, sig_ref, func_ref)?;
+            }
+            BlockTerminator::Invoke(target_func, id, target, ref alternatives)
+            | BlockTerminator::InvokeIndirect(target_func, id, target, ref alternatives) => {
+                let (sig, sig_ref, func_ref) = self
+                    .resources
+                    .func_refs
+                    .iter()
+                    .find(|(_, _, f)| *f == target_func)
+                    .expect("Failed to find previously selected function")
+                    .clone();
+
+                let opcode = match terminator {
+                    BlockTerminator::Invoke(..) => Opcode::Invoke,
+                    BlockTerminator::InvokeIndirect(..) => Opcode::InvokeIndirect,
+                    _ => unreachable!(),
+                };
+
+                insert_invoke_to_function(
+                    self,
+                    builder,
+                    opcode,
+                    &sig,
+                    sig_ref,
+                    func_ref,
+                    id,
+                    target,
+                    alternatives,
+                )?;
             }
         }
 
