@@ -346,6 +346,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         Ok((next_stack, extra_arg_idx))
     }
 
+    // FIXME Always spill all returns at once for non-internal call convs as
+    // required by those call convs.
     fn compute_ret_locs(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
