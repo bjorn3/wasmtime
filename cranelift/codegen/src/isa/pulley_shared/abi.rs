@@ -54,7 +54,6 @@ where
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
         params: &[ir::AbiParam],
-        args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
@@ -71,7 +70,6 @@ where
         let mut next_stack: u32 = 0;
 
         let ret_area_ptr = if add_ret_area_ptr {
-            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
             next_x_reg += 1;
             Some(ABIArg::reg(
                 x_reg(next_x_reg - 1).to_real_reg().unwrap(),
@@ -148,6 +146,84 @@ where
         next_stack = align_to(next_stack, Self::stack_align(call_conv));
 
         Ok((next_stack, pos))
+    }
+
+    fn compute_ret_locs(
+        call_conv: isa::CallConv,
+        _flags: &settings::Flags,
+        params: &[ir::AbiParam],
+        mut args: ArgsAccumulator,
+    ) -> CodegenResult<u32> {
+        // NB: make sure this method stays in sync with
+        // `cranelift_pulley::interp::Vm::call`.
+
+        let x_end = 15;
+        let f_end = 15;
+        let v_end = 15;
+
+        let mut next_x_reg = 0;
+        let mut next_f_reg = 0;
+        let mut next_v_reg = 0;
+        let mut next_stack: u32 = 0;
+
+        for param in params {
+            // Find the regclass(es) of the register(s) used to store a value of
+            // this type.
+            let (rcs, reg_tys) = Self::I::rc_for_type(param.value_type)?;
+
+            let mut slots = ABIArgSlotVec::new();
+            for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
+                let next_reg = if (next_x_reg <= x_end) && *rc == RegClass::Int {
+                    let x = Some(x_reg(next_x_reg));
+                    next_x_reg += 1;
+                    x
+                } else if (next_f_reg <= f_end) && *rc == RegClass::Float {
+                    let f = Some(f_reg(next_f_reg));
+                    next_f_reg += 1;
+                    f
+                } else if (next_v_reg <= v_end) && *rc == RegClass::Vector {
+                    let v = Some(v_reg(next_v_reg));
+                    next_v_reg += 1;
+                    v
+                } else {
+                    None
+                };
+
+                if let Some(reg) = next_reg {
+                    slots.push(ABIArgSlot::Reg {
+                        reg: reg.to_real_reg().unwrap(),
+                        ty: *reg_ty,
+                        extension: param.extension,
+                    });
+                } else {
+                    // Compute size and 16-byte stack alignment happens
+                    // separately after all args.
+                    let size = reg_ty.bits() / 8;
+                    let size = std::cmp::max(size, 8);
+
+                    // Align.
+                    debug_assert!(size.is_power_of_two());
+                    next_stack = align_to(next_stack, size);
+
+                    slots.push(ABIArgSlot::Stack {
+                        offset: i64::from(next_stack),
+                        ty: *reg_ty,
+                        extension: param.extension,
+                    });
+
+                    next_stack += size;
+                }
+            }
+
+            args.push(ABIArg::Slots {
+                slots,
+                purpose: param.purpose,
+            });
+        }
+
+        next_stack = align_to(next_stack, Self::stack_align(call_conv));
+
+        Ok(next_stack)
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I {

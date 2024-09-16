@@ -292,7 +292,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
         params: &[ir::AbiParam],
-        args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
@@ -311,12 +310,11 @@ impl ABIMachineSpec for S390xMachineDeps {
         // offset computation, include this area as part of the argument area;
         // however, this does not apply to the tail-call convention, which uses the
         // callee frame instead to pass arguments.
-        if call_conv != isa::CallConv::Tail && args_or_rets == ArgsOrRets::Args {
+        if call_conv != isa::CallConv::Tail {
             next_stack = REG_SAVE_AREA_SIZE;
         }
 
         let ret_area_ptr = if add_ret_area_ptr {
-            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
             next_gpr += 1;
             Some(ABIArg::reg(
                 get_intreg_for_arg(call_conv, 0)
@@ -345,35 +343,21 @@ impl ABIMachineSpec for S390xMachineDeps {
             debug_assert!(intreg as i32 + fltreg as i32 + vecreg as i32 <= 1);
 
             let (next_reg, candidate, implicit_ref) = if intreg {
-                let candidate = match args_or_rets {
-                    ArgsOrRets::Args => get_intreg_for_arg(call_conv, next_gpr),
-                    ArgsOrRets::Rets => get_intreg_for_ret(call_conv, next_gpr),
-                };
+                let candidate = get_intreg_for_arg(call_conv, next_gpr);
                 (&mut next_gpr, candidate, None)
             } else if fltreg {
-                let candidate = match args_or_rets {
-                    ArgsOrRets::Args => get_fltreg_for_arg(next_fpr),
-                    ArgsOrRets::Rets => get_fltreg_for_ret(next_fpr),
-                };
+                let candidate = get_fltreg_for_arg(next_fpr);
                 (&mut next_fpr, candidate, None)
             } else if vecreg {
-                let candidate = match args_or_rets {
-                    ArgsOrRets::Args => get_vecreg_for_arg(next_vr),
-                    ArgsOrRets::Rets => get_vecreg_for_ret(next_vr),
-                };
+                let candidate = get_vecreg_for_arg(next_vr);
                 (&mut next_vr, candidate, None)
             } else {
                 // We must pass this by implicit reference.
-                if args_or_rets == ArgsOrRets::Rets {
-                    // For return values, just force them to memory.
-                    (&mut next_gpr, None, None)
-                } else {
-                    // For arguments, implicitly convert to pointer type.
-                    let implicit_ref = Some(param.value_type);
-                    param = ir::AbiParam::new(types::I64);
-                    let candidate = get_intreg_for_arg(call_conv, next_gpr);
-                    (&mut next_gpr, candidate, implicit_ref)
-                }
+                // For arguments, implicitly convert to pointer type.
+                let implicit_ref = Some(param.value_type);
+                param = ir::AbiParam::new(types::I64);
+                let candidate = get_intreg_for_arg(call_conv, next_gpr);
+                (&mut next_gpr, candidate, implicit_ref)
             };
 
             let slot = if let Some(reg) = candidate {
@@ -454,7 +438,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         // With the tail-call convention, arguments are passed in the *callee*'s
         // frame instead of the caller's frame.  Update all offsets accordingly
         // (note that resulting offsets will all be negative).
-        if call_conv == isa::CallConv::Tail && args_or_rets == ArgsOrRets::Args && next_stack != 0 {
+        if call_conv == isa::CallConv::Tail && next_stack != 0 {
             for arg in args.args_mut() {
                 match arg {
                     ABIArg::Slots { slots, .. } => {
@@ -480,6 +464,93 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
 
         Ok((next_stack, extra_arg))
+    }
+
+    fn compute_ret_locs(
+        call_conv: isa::CallConv,
+        _flags: &settings::Flags,
+        params: &[ir::AbiParam],
+        mut args: ArgsAccumulator,
+    ) -> CodegenResult<u32> {
+        assert_ne!(
+            call_conv,
+            isa::CallConv::Winch,
+            "s390x does not support the 'winch' calling convention yet"
+        );
+
+        let mut next_gpr = 0;
+        let mut next_fpr = 0;
+        let mut next_vr = 0;
+        let mut next_stack: u32 = 0;
+
+        for param in params.into_iter().copied() {
+            if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
+                panic!("ArgumentPurpose::StructArgument not allowed for returns");
+            }
+
+            let intreg = in_int_reg(param.value_type);
+            let fltreg = in_flt_reg(param.value_type);
+            let vecreg = in_vec_reg(param.value_type);
+            debug_assert!(intreg as i32 + fltreg as i32 + vecreg as i32 <= 1);
+
+            let (next_reg, candidate) = if intreg {
+                let candidate = get_intreg_for_ret(call_conv, next_gpr);
+                (&mut next_gpr, candidate)
+            } else if fltreg {
+                let candidate = get_fltreg_for_ret(next_fpr);
+                (&mut next_fpr, candidate)
+            } else if vecreg {
+                let candidate = get_vecreg_for_ret(next_vr);
+                (&mut next_vr, candidate)
+            } else {
+                // We must pass this by implicit reference.
+                // For return values, just force them to memory.
+                (&mut next_gpr, None)
+            };
+
+            let slot = if let Some(reg) = candidate {
+                *next_reg += 1;
+                ABIArgSlot::Reg {
+                    reg: reg.to_real_reg().unwrap(),
+                    ty: param.value_type,
+                    extension: param.extension,
+                }
+            } else {
+                // Compute size. Every argument or return value takes a slot of
+                // at least 8 bytes.
+                let size = (ty_bits(param.value_type) / 8) as u32;
+                let slot_size = std::cmp::max(size, 8);
+
+                // Align the stack slot.
+                debug_assert!(slot_size.is_power_of_two());
+                let slot_align = std::cmp::min(slot_size, 8);
+                next_stack = align_to(next_stack, slot_align);
+
+                // If the type is actually of smaller size (and the argument
+                // was not extended), it is passed right-aligned.
+                let offset = if size < slot_size && param.extension == ir::ArgumentExtension::None {
+                    slot_size - size
+                } else {
+                    0
+                };
+                let offset = (next_stack + offset) as i64;
+                next_stack += slot_size;
+                ABIArgSlot::Stack {
+                    offset,
+                    ty: param.value_type,
+                    extension: param.extension,
+                }
+            };
+
+            args.push(ABIArg::Slots {
+                slots: smallvec![slot],
+                purpose: param.purpose,
+            });
+        }
+
+        next_stack = align_to(next_stack, 8);
+
+        Ok(next_stack)
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {

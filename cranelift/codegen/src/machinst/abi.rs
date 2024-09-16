@@ -259,17 +259,6 @@ impl ABIArg {
     }
 }
 
-/// Are we computing information about arguments or return values? Much of the
-/// handling is factored out into common routines; this enum allows us to
-/// distinguish which case we're handling.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ArgsOrRets {
-    /// Arguments.
-    Args,
-    /// Return values.
-    Rets,
-}
-
 /// Abstract location for a machine-specific ABI impl to translate into the
 /// appropriate addressing mode.
 #[derive(Clone, Copy, Debug)]
@@ -373,8 +362,8 @@ pub trait ABIMachineSpec {
     /// Returns required stack alignment in bytes.
     fn stack_align(call_conv: isa::CallConv) -> u32;
 
-    /// Process a list of parameters or return values and allocate them to registers
-    /// and stack slots.
+    /// Process a list of parameters and allocate them to registers and stack
+    /// slots.
     ///
     /// The argument locations should be pushed onto the given `ArgsAccumulator`
     /// in order. Any extra arguments added (such as return area pointers)
@@ -388,10 +377,23 @@ pub trait ABIMachineSpec {
         call_conv: isa::CallConv,
         flags: &settings::Flags,
         params: &[ir::AbiParam],
-        args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)>;
+
+    /// Process a list of return values and allocate them to registers and
+    /// stack slots.
+    ///
+    /// The return locations should be pushed onto the given `ArgsAccumulator`
+    /// in order.
+    ///
+    /// Returns the stack-space used (rounded up to as alignment requires).
+    fn compute_ret_locs(
+        call_conv: isa::CallConv,
+        flags: &settings::Flags,
+        params: &[ir::AbiParam],
+        args: ArgsAccumulator,
+    ) -> CodegenResult<u32>;
 
     /// Generate a load from the stack.
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I;
@@ -854,12 +856,10 @@ impl SigSet {
         // NOTE: We rely on the order of the args (rets -> args) inserted to compute the offsets in
         // `SigSet::args()` and `SigSet::rets()`. Therefore, we cannot change the two
         // compute_arg_locs order.
-        let (sized_stack_ret_space, _) = M::compute_arg_locs(
+        let sized_stack_ret_space = M::compute_ret_locs(
             sig.call_conv,
             flags,
             &returns,
-            ArgsOrRets::Rets,
-            /* extra ret-area ptr = */ false,
             ArgsAccumulator::new(&mut self.abi_args),
         )?;
         let rets_end = u32::try_from(self.abi_args.len()).unwrap();
@@ -878,7 +878,6 @@ impl SigSet {
             sig.call_conv,
             flags,
             &sig.params,
-            ArgsOrRets::Args,
             need_stack_return_area,
             ArgsAccumulator::new(&mut self.abi_args),
         )?;

@@ -105,12 +105,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
         call_conv: isa::CallConv,
         flags: &settings::Flags,
         params: &[ir::AbiParam],
-        args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
         let is_apple_cc = call_conv == isa::CallConv::AppleAarch64;
-        let is_winch_return = call_conv == isa::CallConv::Winch && args_or_rets == ArgsOrRets::Rets;
 
         // See AArch64 ABI (https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#64parameter-passing), sections 6.4.
         //
@@ -152,7 +150,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let mut remaining_reg_vals = 16;
 
         let ret_area_ptr = if add_ret_area_ptr {
-            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
             if call_conv != isa::CallConv::Winch {
                 // In the AAPCS64 calling convention the return area pointer is
                 // stored in x8.
@@ -178,7 +175,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             None
         };
 
-        for (i, param) in params.into_iter().enumerate() {
+        for param in params {
             if is_apple_cc && param.value_type == types::F128 && !flags.enable_llvm_abi_extensions()
             {
                 panic!(
@@ -204,8 +201,253 @@ impl ABIMachineSpec for AArch64MachineDeps {
             }
 
             if let ir::ArgumentPurpose::StructReturn = param.purpose {
-                // FIXME add assert_eq!(args_or_rets, ArgsOrRets::Args); once
-                // ensure_struct_return_ptr_is_returned is gone.
+                assert!(
+                    param.value_type == types::I64,
+                    "StructReturn must be a pointer sized integer"
+                );
+                args.push(ABIArg::Slots {
+                    slots: smallvec![ABIArgSlot::Reg {
+                        reg: xreg(8).to_real_reg().unwrap(),
+                        ty: types::I64,
+                        extension: param.extension,
+                    },],
+                    purpose: ir::ArgumentPurpose::StructReturn,
+                });
+                continue;
+            }
+
+            // Handle multi register params
+            //
+            // See AArch64 ABI (https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#642parameter-passing-rules), (Section 6.4.2 Stage C).
+            //
+            // For arguments with alignment of 16 we round up the register number
+            // to the next even value. So we can never allocate for example an i128
+            // to X1 and X2, we have to skip one register and do X2, X3
+            // (Stage C.8)
+            // Note: The Apple ABI deviates a bit here. They don't respect Stage C.8
+            // and will happily allocate a i128 to X1 and X2
+            //
+            // For integer types with alignment of 16 we also have the additional
+            // restriction of passing the lower half in Xn and the upper half in Xn+1
+            // (Stage C.9)
+            //
+            // For examples of how LLVM handles this: https://godbolt.org/z/bhd3vvEfh
+            //
+            // On the Apple ABI it is unspecified if we can spill half the value into the stack
+            // i.e load the lower half into x7 and the upper half into the stack
+            // LLVM does not seem to do this, so we are going to replicate that behaviour
+            let is_multi_reg = rcs.len() >= 2;
+            if is_multi_reg {
+                assert!(
+                    rcs.len() == 2,
+                    "Unable to handle multi reg params with more than 2 regs"
+                );
+                assert!(
+                    rcs == &[RegClass::Int, RegClass::Int],
+                    "Unable to handle non i64 regs"
+                );
+
+                let reg_class_space = max_per_class_reg_vals - next_xreg;
+                let reg_space = remaining_reg_vals;
+
+                if reg_space >= 2 && reg_class_space >= 2 {
+                    // The aarch64 ABI does not allow us to start a split argument
+                    // at an odd numbered register. So we need to skip one register
+                    //
+                    // TODO: The Fast ABI should probably not skip the register
+                    if !is_apple_cc && next_xreg % 2 != 0 {
+                        next_xreg += 1;
+                    }
+
+                    let lower_reg = xreg(next_xreg);
+                    let upper_reg = xreg(next_xreg + 1);
+
+                    args.push(ABIArg::Slots {
+                        slots: smallvec![
+                            ABIArgSlot::Reg {
+                                reg: lower_reg.to_real_reg().unwrap(),
+                                ty: reg_types[0],
+                                extension: param.extension,
+                            },
+                            ABIArgSlot::Reg {
+                                reg: upper_reg.to_real_reg().unwrap(),
+                                ty: reg_types[1],
+                                extension: param.extension,
+                            },
+                        ],
+                        purpose: param.purpose,
+                    });
+
+                    next_xreg += 2;
+                    remaining_reg_vals -= 2;
+                    continue;
+                }
+            } else {
+                // Single Register parameters
+                let rc = rcs[0];
+                let next_reg = match rc {
+                    RegClass::Int => &mut next_xreg,
+                    RegClass::Float => &mut next_vreg,
+                    RegClass::Vector => unreachable!(),
+                };
+
+                // Use max_per_class_reg_vals & remaining_reg_vals otherwise
+                let push_to_reg = *next_reg < max_per_class_reg_vals && remaining_reg_vals > 0;
+
+                if push_to_reg {
+                    let reg = match rc {
+                        RegClass::Int => xreg(*next_reg),
+                        RegClass::Float => vreg(*next_reg),
+                        RegClass::Vector => unreachable!(),
+                    };
+                    // Overlay Z-regs on V-regs for parameter passing.
+                    let ty = if param.value_type.is_dynamic_vector() {
+                        dynamic_to_fixed(param.value_type)
+                    } else {
+                        param.value_type
+                    };
+                    args.push(ABIArg::reg(
+                        reg.to_real_reg().unwrap(),
+                        ty,
+                        param.extension,
+                        param.purpose,
+                    ));
+                    *next_reg += 1;
+                    remaining_reg_vals -= 1;
+                    continue;
+                }
+            }
+
+            // Spill to the stack
+
+            // Compute the stack slot's size.
+            let size = (ty_bits(param.value_type) / 8) as u32;
+
+            let size = if is_apple_cc {
+                // MacOS and Winch aarch64 allows stack slots with
+                // sizes less than 8 bytes. They still need to be
+                // properly aligned on their natural data alignment,
+                // though.
+                size
+            } else {
+                // Every arg takes a minimum slot of 8 bytes. (16-byte stack
+                // alignment happens separately after all args.)
+                std::cmp::max(size, 8)
+            };
+
+            // Align the stack slot.
+            debug_assert!(size.is_power_of_two());
+            next_stack = align_to(next_stack, size);
+
+            let slots = reg_types
+                .iter()
+                .copied()
+                // Build the stack locations from each slot
+                .scan(next_stack, |next_stack, ty| {
+                    let slot_offset = *next_stack as i64;
+                    *next_stack += (ty_bits(ty) / 8) as u32;
+
+                    Some((ty, slot_offset))
+                })
+                .map(|(ty, offset)| ABIArgSlot::Stack {
+                    offset,
+                    ty,
+                    extension: param.extension,
+                })
+                .collect();
+
+            args.push(ABIArg::Slots {
+                slots,
+                purpose: param.purpose,
+            });
+
+            next_stack += size;
+        }
+
+        let extra_arg = if let Some(ret_area_ptr) = ret_area_ptr {
+            args.push_non_formal(ret_area_ptr);
+            Some(args.args().len() - 1)
+        } else {
+            None
+        };
+
+        next_stack = align_to(next_stack, 16);
+
+        Ok((next_stack, extra_arg))
+    }
+
+    fn compute_ret_locs(
+        call_conv: isa::CallConv,
+        flags: &settings::Flags,
+        params: &[ir::AbiParam],
+        mut args: ArgsAccumulator,
+    ) -> CodegenResult<u32> {
+        let is_apple_cc = call_conv == isa::CallConv::AppleAarch64;
+        let is_winch_return = call_conv == isa::CallConv::Winch;
+
+        // See AArch64 ABI (https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#64parameter-passing), sections 6.4.
+        //
+        // MacOS aarch64 is slightly different, see also
+        // https://developer.apple.com/documentation/xcode/writing_arm64_code_for_apple_platforms.
+        // We are diverging from the MacOS aarch64 implementation in the
+        // following ways:
+        // - sign- and zero- extensions of data types less than 32 bits are not
+        // implemented yet.
+        // - we align the arguments stack space to a 16-bytes boundary, while
+        // the MacOS allows aligning only on 8 bytes. In practice it means we're
+        // slightly overallocating when calling, which is fine, and doesn't
+        // break our other invariants that the stack is always allocated in
+        // 16-bytes chunks.
+
+        let mut next_xreg = if call_conv == isa::CallConv::Tail {
+            // We reserve `x0` for the return area pointer. For simplicity, we
+            // reserve it even when there is no return area pointer needed. This
+            // also means that identity functions don't have to shuffle arguments to
+            // different return registers because we shifted all argument register
+            // numbers down by one to make space for the return area pointer.
+            //
+            // Also, we cannot use all allocatable GPRs as arguments because we need
+            // at least one allocatable register for holding the callee address in
+            // indirect calls. So skip `x1` also, reserving it for that role.
+            2
+        } else {
+            0
+        };
+        let mut next_vreg = 0;
+        let mut next_stack: u32 = 0;
+
+        // Note on return values: on the regular ABI, we may return values
+        // in 8 registers for V128 and I64 registers independently of the
+        // number of register values returned in the other class. That is,
+        // we can return values in up to 8 integer and
+        // 8 vector registers at once.
+        let max_per_class_reg_vals = 8; // x0-x7 and v0-v7
+        let mut remaining_reg_vals = 16;
+
+        for (i, param) in params.into_iter().enumerate() {
+            if is_apple_cc && param.value_type == types::F128 && !flags.enable_llvm_abi_extensions()
+            {
+                panic!(
+                    "f128 args/return values not supported for apple_aarch64 unless LLVM ABI extensions are enabled"
+                );
+            }
+
+            let (rcs, reg_types) = Inst::rc_for_type(param.value_type)?;
+
+            if let ir::ArgumentPurpose::StructReturn = param.purpose {
+                assert!(
+                    call_conv != isa::CallConv::Tail,
+                    "support for StructReturn parameters is not implemented for the `tail` \
+                    calling convention yet",
+                );
+            }
+
+            if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
+                panic!("ArgumentPurpose::StructArgument not allowed for returns");
+            }
+
+            if let ir::ArgumentPurpose::StructReturn = param.purpose {
+                // FIXME remove once ensure_struct_return_ptr_is_returned is gone.
                 assert!(
                     param.value_type == types::I64,
                     "StructReturn must be a pointer sized integer"
@@ -376,20 +618,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
             next_stack += size;
         }
 
-        let extra_arg = if let Some(ret_area_ptr) = ret_area_ptr {
-            args.push_non_formal(ret_area_ptr);
-            Some(args.args().len() - 1)
-        } else {
-            None
-        };
-
         if is_winch_return {
             winch::reverse_stack(args, next_stack, false);
         }
 
         next_stack = align_to(next_stack, 16);
 
-        Ok((next_stack, extra_arg))
+        Ok(next_stack)
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {

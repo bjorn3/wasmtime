@@ -90,7 +90,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
         params: &[ir::AbiParam],
-        args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
@@ -100,22 +99,19 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             "riscv64 does not support the 'winch' calling convention yet"
         );
 
-        // All registers that can be used as parameters or rets.
+        // All registers that can be used as parameters.
         // both start and end are included.
-        let (x_start, x_end, f_start, f_end) = match args_or_rets {
-            ArgsOrRets::Args => (10, 17, 10, 17),
-            ArgsOrRets::Rets => (10, 11, 10, 11),
-        };
-        let mut next_x_reg = x_start;
-        let mut next_f_reg = f_start;
+        let mut next_x_reg = 10;
+        let x_end = 17;
+        let mut next_f_reg = 10;
+        let f_end = 17;
         // Stack space.
         let mut next_stack: u32 = 0;
 
         let ret_area_ptr = if add_ret_area_ptr {
-            assert!(ArgsOrRets::Args == args_or_rets);
             next_x_reg += 1;
             Some(ABIArg::reg(
-                x_reg(x_start).to_real_reg().unwrap(),
+                x_reg(10).to_real_reg().unwrap(),
                 I64,
                 ir::ArgumentExtension::None,
                 ir::ArgumentPurpose::Normal,
@@ -184,6 +180,80 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         next_stack = align_to(next_stack, Self::stack_align(call_conv));
 
         Ok((next_stack, pos))
+    }
+
+    fn compute_ret_locs(
+        call_conv: isa::CallConv,
+        _flags: &settings::Flags,
+        params: &[ir::AbiParam],
+        mut args: ArgsAccumulator,
+    ) -> CodegenResult<u32> {
+        assert_ne!(
+            call_conv,
+            isa::CallConv::Winch,
+            "riscv64 does not support the 'winch' calling convention yet"
+        );
+
+        // All registers that can be used as rets.
+        // both start and end are included.
+        let mut next_x_reg = 10;
+        let x_end = 11;
+        let mut next_f_reg = 10;
+        let f_end = 11;
+        // Stack space.
+        let mut next_stack: u32 = 0;
+
+        for param in params {
+            if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
+                panic!("ArgumentPurpose::StructArgument not allowed for returns");
+            }
+
+            // Find regclass(es) of the register(s) used to store a value of this type.
+            let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
+            let mut slots = ABIArgSlotVec::new();
+            for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
+                let next_reg = if (next_x_reg <= x_end) && *rc == RegClass::Int {
+                    let x = Some(x_reg(next_x_reg));
+                    next_x_reg += 1;
+                    x
+                } else if (next_f_reg <= f_end) && *rc == RegClass::Float {
+                    let x = Some(f_reg(next_f_reg));
+                    next_f_reg += 1;
+                    x
+                } else {
+                    None
+                };
+                if let Some(reg) = next_reg {
+                    slots.push(ABIArgSlot::Reg {
+                        reg: reg.to_real_reg().unwrap(),
+                        ty: *reg_ty,
+                        extension: param.extension,
+                    });
+                } else {
+                    // Compute size and 16-byte stack alignment happens
+                    // separately after all args.
+                    let size = reg_ty.bits() / 8;
+                    let size = std::cmp::max(size, 8);
+                    // Align.
+                    debug_assert!(size.is_power_of_two());
+                    next_stack = align_to(next_stack, size);
+                    slots.push(ABIArgSlot::Stack {
+                        offset: next_stack as i64,
+                        ty: *reg_ty,
+                        extension: param.extension,
+                    });
+                    next_stack += size;
+                }
+            }
+            args.push(ABIArg::Slots {
+                slots,
+                purpose: param.purpose,
+            });
+        }
+
+        next_stack = align_to(next_stack, Self::stack_align(call_conv));
+
+        Ok(next_stack)
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {

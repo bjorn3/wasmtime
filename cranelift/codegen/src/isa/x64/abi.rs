@@ -98,7 +98,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         call_conv: isa::CallConv,
         flags: &settings::Flags,
         params: &[ir::AbiParam],
-        args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
@@ -109,7 +108,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let mut next_stack: u32 = 0;
         let mut next_param_idx = 0; // Fastcall cares about overall param index
 
-        if args_or_rets == ArgsOrRets::Args && is_fastcall {
+        if is_fastcall {
             // Fastcall always reserves 32 bytes of shadow space corresponding to
             // the four initial in-arg parameters.
             //
@@ -119,7 +118,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
 
         let ret_area_ptr = if add_ret_area_ptr {
-            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
             next_gpr += 1;
             next_param_idx += 1;
             // In the SystemV and WindowsFastcall ABIs, the return area pointer is the first
@@ -137,23 +135,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             None
         };
 
-        // If any param uses extension, the winch calling convention will not pack its results
-        // on the stack and will instead align them to 8-byte boundaries the same way that all the
-        // other calling conventions do. This isn't consistent with Winch itself, but is fine as
-        // Winch only uses this calling convention via trampolines, and those trampolines don't add
-        // extension annotations. Additionally, handling extension attributes this way allows clif
-        // functions that use them with the Winch calling convention to interact successfully with
-        // testing infrastructure.
-        // The results are also not packed if any of the types are `f16`. This is to simplify the
-        // implementation of `Inst::load`/`Inst::store` (which would otherwise require multiple
-        // instructions), and doesn't affect Winch itself as Winch doesn't support `f16` at all.
-        let uses_extension = params
-            .iter()
-            .any(|p| p.extension != ir::ArgumentExtension::None || p.value_type == types::F16);
-
-        for (ix, param) in params.iter().enumerate() {
-            let last_param = ix == params.len() - 1;
-
+        for param in params {
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack as i64;
                 let size = size;
@@ -213,11 +195,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // Windows fastcall dictates that `__m128i` parameters to a function
             // are passed indirectly as pointers, so handle that as a special
             // case before the loop below.
-            if param.value_type.is_vector()
-                && param.value_type.bits() >= 128
-                && args_or_rets == ArgsOrRets::Args
-                && is_fastcall
-            {
+            if param.value_type.is_vector() && param.value_type.bits() >= 128 && is_fastcall {
                 let pointer = match get_intreg_for_arg(call_conv, next_gpr, next_param_idx) {
                     Some(reg) => {
                         next_gpr += 1;
@@ -251,10 +229,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // SystemV dictates that 128bit int parameters are always either
             // passed in two registers or on the stack, so handle that as a
             // special case before the loop below.
-            if param.value_type == types::I128
-                && args_or_rets == ArgsOrRets::Args
-                && call_conv == CallConv::SystemV
-            {
+            if param.value_type == types::I128 && call_conv == CallConv::SystemV {
                 let mut slots = ABIArgSlotVec::new();
                 match (
                     get_intreg_for_arg(CallConv::SystemV, next_gpr, next_param_idx),
@@ -305,24 +280,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             }
 
             let mut slots = ABIArgSlotVec::new();
-            for (ix, (rc, reg_ty)) in rcs.iter().zip(reg_tys.iter()).enumerate() {
-                let last_slot = last_param && ix == rcs.len() - 1;
-
+            for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
                 let intreg = *rc == RegClass::Int;
                 let nextreg = if intreg {
-                    match args_or_rets {
-                        ArgsOrRets::Args => get_intreg_for_arg(call_conv, next_gpr, next_param_idx),
-                        ArgsOrRets::Rets => {
-                            get_intreg_for_retval(call_conv, flags, next_gpr, last_slot)
-                        }
-                    }
+                    get_intreg_for_arg(call_conv, next_gpr, next_param_idx)
                 } else {
-                    match args_or_rets {
-                        ArgsOrRets::Args => {
-                            get_fltreg_for_arg(call_conv, next_vreg, next_param_idx)
-                        }
-                        ArgsOrRets::Rets => get_fltreg_for_retval(call_conv, next_vreg, last_slot),
-                    }
+                    get_fltreg_for_arg(call_conv, next_vreg, next_param_idx)
                 };
                 next_param_idx += 1;
                 if let Some(reg) = nextreg {
@@ -337,11 +300,152 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         extension: param.extension,
                     });
                 } else {
+                    let size = std::cmp::max(reg_ty.bytes(), 8);
+
+                    // Align.
+                    debug_assert!(size.is_power_of_two());
+                    next_stack = align_to(next_stack, size);
+
+                    slots.push(ABIArgSlot::Stack {
+                        offset: next_stack as i64,
+                        ty: *reg_ty,
+                        extension: param.extension,
+                    });
+                    next_stack += size;
+                }
+            }
+
+            args.push(ABIArg::Slots {
+                slots,
+                purpose: param.purpose,
+            });
+        }
+
+        // Fastcall's indirect 128+ bit vector arguments are all located on the
+        // stack, and stack space is reserved after all parameters are passed,
+        // so allocate from the space now.
+        if is_fastcall {
+            for arg in args.args_mut() {
+                if let ABIArg::ImplicitPtrArg { offset, .. } = arg {
+                    assert_eq!(*offset, 0);
+                    next_stack = align_to(next_stack, 16);
+                    *offset = next_stack as i64;
+                    next_stack += 16;
+                }
+            }
+        }
+        let extra_arg_idx = if let Some(ret_area_ptr) = ret_area_ptr {
+            args.push_non_formal(ret_area_ptr);
+            Some(args.args().len() - 1)
+        } else {
+            None
+        };
+
+        next_stack = align_to(next_stack, 16);
+
+        Ok((next_stack, extra_arg_idx))
+    }
+
+    fn compute_ret_locs(
+        call_conv: isa::CallConv,
+        flags: &settings::Flags,
+        returns: &[ir::AbiParam],
+        mut args: ArgsAccumulator,
+    ) -> CodegenResult<u32> {
+        let is_fastcall = call_conv == CallConv::WindowsFastcall;
+
+        let mut next_gpr = 0;
+        let mut next_vreg = 0;
+        let mut next_stack: u32 = 0;
+
+        // If any return uses extension, the winch calling convention will not pack its results
+        // on the stack and will instead align them to 8-byte boundaries the same way that all the
+        // other calling conventions do. This isn't consistent with Winch itself, but is fine as
+        // Winch only uses this calling convention via trampolines, and those trampolines don't add
+        // extension annotations. Additionally, handling extension attributes this way allows clif
+        // functions that use them with the Winch calling convention to interact successfully with
+        // testing infrastructure.
+        // The results are also not packed if any of the types are `f16`. This is to simplify the
+        // implementation of `Inst::load`/`Inst::store` (which would otherwise require multiple
+        // instructions), and doesn't affect Winch itself as Winch doesn't support `f16` at all.
+        let uses_extension = returns
+            .iter()
+            .any(|p| p.extension != ir::ArgumentExtension::None || p.value_type == types::F16);
+
+        for (ix, param) in returns.iter().enumerate() {
+            let last_return = ix == returns.len() - 1;
+
+            if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
+                panic!("ArgumentPurpose::StructArgument not allowed for returns");
+            }
+
+            // Find regclass(es) of the register(s) used to store a value of this type.
+            let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
+
+            // Now assign ABIArgSlots for each register-sized part.
+            //
+            // Note that the handling of `i128` values is unique here:
+            //
+            // - If `enable_llvm_abi_extensions` is set in the flags, each
+            //   `i128` is split into two `i64`s and assigned exactly as if it
+            //   were two consecutive 64-bit args, except that if one of the
+            //   two halves is forced onto the stack, the other half is too.
+            //   This is consistent with LLVM's behavior, and is needed for
+            //   some uses of Cranelift (e.g., the rustc backend).
+            //
+            // - Otherwise, both SysV and Fastcall specify behavior (use of
+            //   vector register, a register pair, or passing by reference
+            //   depending on the case), but for simplicity, we will just panic if
+            //   an i128 type appears in a signature and the LLVM extensions flag
+            //   is not set.
+            //
+            // For examples of how rustc compiles i128 args and return values on
+            // both SysV and Fastcall platforms, see:
+            // https://godbolt.org/z/PhG3ob
+
+            if param.value_type.bits() > 64
+                && !(param.value_type.is_vector() || param.value_type.is_float())
+                && !flags.enable_llvm_abi_extensions()
+            {
+                panic!(
+                    "i128 args/return values not supported unless LLVM ABI extensions are enabled"
+                );
+            }
+            // As MSVC doesn't support f16/f128 there is no standard way to pass/return them with
+            // the Windows ABI. LLVM passes/returns them in XMM registers.
+            if matches!(param.value_type, types::F16 | types::F128)
+                && is_fastcall
+                && !flags.enable_llvm_abi_extensions()
+            {
+                panic!(
+                    "f16/f128 args/return values not supported for windows_fastcall unless LLVM ABI extensions are enabled"
+                );
+            }
+
+            let mut slots = ABIArgSlotVec::new();
+            for (ix, (rc, reg_ty)) in rcs.iter().zip(reg_tys.iter()).enumerate() {
+                let last_slot = last_return && ix == rcs.len() - 1;
+
+                let intreg = *rc == RegClass::Int;
+                let nextreg = if intreg {
+                    get_intreg_for_retval(call_conv, flags, next_gpr, last_slot)
+                } else {
+                    get_fltreg_for_retval(call_conv, next_vreg, last_slot)
+                };
+                if let Some(reg) = nextreg {
+                    if intreg {
+                        next_gpr += 1;
+                    } else {
+                        next_vreg += 1;
+                    }
+                    slots.push(ABIArgSlot::Reg {
+                        reg: reg.to_real_reg().unwrap(),
+                        ty: *reg_ty,
+                        extension: param.extension,
+                    });
+                } else {
                     let size = reg_ty.bytes();
-                    let size = if call_conv == CallConv::Winch
-                        && args_or_rets == ArgsOrRets::Rets
-                        && !uses_extension
-                    {
+                    let size = if call_conv == CallConv::Winch && !uses_extension {
                         size
                     } else {
                         let size = std::cmp::max(size, 8);
@@ -367,35 +471,15 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             });
         }
 
-        // Fastcall's indirect 128+ bit vector arguments are all located on the
-        // stack, and stack space is reserved after all parameters are passed,
-        // so allocate from the space now.
-        if args_or_rets == ArgsOrRets::Args && is_fastcall {
-            for arg in args.args_mut() {
-                if let ABIArg::ImplicitPtrArg { offset, .. } = arg {
-                    assert_eq!(*offset, 0);
-                    next_stack = align_to(next_stack, 16);
-                    *offset = next_stack as i64;
-                    next_stack += 16;
-                }
-            }
-        }
-        let extra_arg_idx = if let Some(ret_area_ptr) = ret_area_ptr {
-            args.push_non_formal(ret_area_ptr);
-            Some(args.args().len() - 1)
-        } else {
-            None
-        };
-
         // Winch writes the first result to the highest offset, so we need to iterate through the
         // args and adjust the offsets down.
-        if call_conv == CallConv::Winch && args_or_rets == ArgsOrRets::Rets {
+        if call_conv == CallConv::Winch {
             winch::reverse_stack(args, next_stack, uses_extension);
         }
 
         next_stack = align_to(next_stack, 16);
 
-        Ok((next_stack, extra_arg_idx))
+        Ok(next_stack)
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I {
