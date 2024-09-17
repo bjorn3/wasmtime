@@ -387,6 +387,15 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             None
         };
 
+        if add_ret_area_ptr && args_or_rets == ArgsOrRets::Rets {
+            args.push_non_formal(ABIArg::reg(
+                regs::rax().to_real_reg().unwrap(),
+                types::I64,
+                ir::ArgumentExtension::None,
+                ir::ArgumentPurpose::Normal,
+            ));
+        }
+
         // Winch writes the first result to the highest offset, so we need to iterate through the
         // args and adjust the offsets down.
         if call_conv == CallConv::Winch && args_or_rets == ArgsOrRets::Rets {

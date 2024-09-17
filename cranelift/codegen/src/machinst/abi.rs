@@ -831,19 +831,14 @@ impl SigSet {
         sig: &ir::Signature,
         flags: &settings::Flags,
     ) -> CodegenResult<SigData> {
-        // Keep in sync with ensure_struct_return_ptr_is_returned
         if sig.uses_special_return(ArgumentPurpose::StructReturn) {
             panic!("Explicit StructReturn return value not allowed: {sig:?}")
         }
-        let tmp;
-        let returns = if let Some(struct_ret_index) =
-            sig.special_param_index(ArgumentPurpose::StructReturn)
-        {
+        let returns = if sig.uses_special_param(ArgumentPurpose::StructReturn) {
             if !sig.returns.is_empty() {
                 panic!("No return values are allowed when using StructReturn: {sig:?}");
             }
-            tmp = [sig.params[struct_ret_index]];
-            &tmp
+            &[]
         } else {
             sig.returns.as_slice()
         };
@@ -1226,7 +1221,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         let tail_args_size = sigs[sig].sized_stack_arg_space;
 
         Ok(Self {
-            ir_sig: ensure_struct_return_ptr_is_returned(&f.signature),
+            ir_sig: f.signature.clone(),
             sig,
             dynamic_stackslots,
             dynamic_type_sizes,
@@ -1369,37 +1364,12 @@ fn generate_gv<M: ABIMachineSpec>(
     }
 }
 
-/// Returns true if the signature needs to be legalized.
-fn missing_struct_return(sig: &ir::Signature) -> bool {
-    sig.uses_special_param(ArgumentPurpose::StructReturn)
-        && !sig.uses_special_return(ArgumentPurpose::StructReturn)
-}
-
-fn ensure_struct_return_ptr_is_returned(sig: &ir::Signature) -> ir::Signature {
-    // Keep in sync with Callee::new
-    let mut sig = sig.clone();
-    if sig.uses_special_return(ArgumentPurpose::StructReturn) {
-        panic!("Explicit StructReturn return value not allowed: {sig:?}")
-    }
-    if let Some(struct_ret_index) = sig.special_param_index(ArgumentPurpose::StructReturn) {
-        if !sig.returns.is_empty() {
-            panic!("No return values are allowed when using StructReturn: {sig:?}");
-        }
-        sig.returns.insert(0, sig.params[struct_ret_index]);
-    }
-    sig
-}
-
 /// ### Pre-Regalloc Functions
 ///
 /// These methods of `Callee` may only be called before regalloc.
 impl<M: ABIMachineSpec> Callee<M> {
     /// Access the (possibly legalized) signature.
     pub fn signature(&self) -> &ir::Signature {
-        debug_assert!(
-            !missing_struct_return(&self.ir_sig),
-            "`Callee::ir_sig` is always legalized"
-        );
         &self.ir_sig
     }
 

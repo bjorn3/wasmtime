@@ -421,30 +421,19 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Find the sret register, if it's used.
         let mut sret_param = None;
-        for ret in vcode.abi().signature().returns.iter() {
-            if ret.purpose == ArgumentPurpose::StructReturn {
-                let entry_bb = f.stencil.layout.entry_block().unwrap();
-                for (&param, sig_param) in f
-                    .dfg
-                    .block_params(entry_bb)
-                    .iter()
-                    .zip(vcode.abi().signature().params.iter())
-                {
-                    if sig_param.purpose == ArgumentPurpose::StructReturn {
-                        assert!(sret_param.is_none());
-                        sret_param = Some(param);
-                    }
-                }
-
-                assert!(sret_param.is_some());
-            }
-        }
-
-        let sret_reg = sret_param.map(|param| {
+        let mut sret_reg = None;
+        if let Some(sret_param_idx) = vcode
+            .abi()
+            .signature()
+            .special_param_index(ArgumentPurpose::StructReturn)
+        {
+            let param = f.dfg.block_params(f.layout.entry_block().unwrap())[sret_param_idx];
             let regs = value_regs[param];
             assert!(regs.len() == 1);
-            regs
-        });
+
+            sret_param = Some(param);
+            sret_reg = Some(regs);
+        }
 
         // Compute instruction colors, find constant instructions, and find instructions with
         // side-effects, in one combined pass.
