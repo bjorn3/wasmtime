@@ -118,6 +118,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
 
         let ret_area_ptr = if add_ret_area_ptr {
+            // FIXME missing store of the implicit return area pointer in %rax when returning
+
             next_gpr += 1;
             next_param_idx += 1;
             // In the SystemV and WindowsFastcall ABIs, the return area pointer is the first
@@ -374,36 +376,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             .iter()
             .any(|p| p.extension != ir::ArgumentExtension::None || p.value_type == types::F16);
 
-        for (ix, param) in returns.iter().enumerate() {
-            let last_return = ix == returns.len() - 1;
-
+        // Perform sanity checks for all return values
+        for param in returns {
             if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
                 panic!("ArgumentPurpose::StructArgument not allowed for returns");
             }
-
-            // Find regclass(es) of the register(s) used to store a value of this type.
-            let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
-
-            // Now assign ABIArgSlots for each register-sized part.
-            //
-            // Note that the handling of `i128` values is unique here:
-            //
-            // - If `enable_llvm_abi_extensions` is set in the flags, each
-            //   `i128` is split into two `i64`s and assigned exactly as if it
-            //   were two consecutive 64-bit args, except that if one of the
-            //   two halves is forced onto the stack, the other half is too.
-            //   This is consistent with LLVM's behavior, and is needed for
-            //   some uses of Cranelift (e.g., the rustc backend).
-            //
-            // - Otherwise, both SysV and Fastcall specify behavior (use of
-            //   vector register, a register pair, or passing by reference
-            //   depending on the case), but for simplicity, we will just panic if
-            //   an i128 type appears in a signature and the LLVM extensions flag
-            //   is not set.
-            //
-            // For examples of how rustc compiles i128 args and return values on
-            // both SysV and Fastcall platforms, see:
-            // https://godbolt.org/z/PhG3ob
 
             if param.value_type.bits() > 64
                 && !(param.value_type.is_vector() || param.value_type.is_float())
@@ -420,9 +397,20 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 && !flags.enable_llvm_abi_extensions()
             {
                 panic!(
-                    "f16/f128 args/return values not supported for windows_fastcall unless LLVM ABI extensions are enabled"
+                    "f16/f128 args/return values not supported for windows_fastcall unless LLVM \
+                    ABI extensions are enabled"
                 );
             }
+        }
+
+        let mut fits_in_regs = true;
+        for (ix, param) in returns.iter().enumerate() {
+            let last_return = ix == returns.len() - 1;
+
+            // Find regclass(es) of the register(s) used to store a value of this type.
+            let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
+
+            // Now assign ABIArgSlots for each register-sized part.
 
             let mut slots = ABIArgSlotVec::new();
             for (ix, (rc, reg_ty)) in rcs.iter().zip(reg_tys.iter()).enumerate() {
@@ -446,6 +434,31 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         extension: param.extension,
                     });
                 } else {
+                    fits_in_regs = false;
+                    break;
+                }
+            }
+
+            args.push(ABIArg::Slots {
+                slots,
+                purpose: param.purpose,
+            });
+        }
+
+        if !fits_in_regs {
+            // Not all return values fit in a register. We need to pass all
+            // return values using a return area pointer instead. As such
+            // clear all existing register assignments and restart.
+            args.reset();
+
+            for param in returns {
+                // Find regclass(es) of the register(s) used to store a value of this type.
+                let (_rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
+
+                // Now assign ABIArgSlots for each register-sized part.
+
+                let mut slots = ABIArgSlotVec::new();
+                for reg_ty in reg_tys {
                     let size = reg_ty.bytes();
                     let size = if call_conv == CallConv::Winch && !uses_extension {
                         size
@@ -465,12 +478,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     });
                     next_stack += size;
                 }
-            }
 
-            args.push(ABIArg::Slots {
-                slots,
-                purpose: param.purpose,
-            });
+                args.push(ABIArg::Slots {
+                    slots,
+                    purpose: param.purpose,
+                });
+            }
         }
 
         // Winch writes the first result to the highest offset, so we need to iterate through the

@@ -299,6 +299,12 @@ impl<'a> ArgsAccumulator<'a> {
         }
     }
 
+    pub fn reset(&mut self) {
+        while self.sig_set_abi_args.len() > self.start {
+            self.sig_set_abi_args.pop();
+        }
+    }
+
     #[inline]
     pub fn push(&mut self, arg: ABIArg) {
         debug_assert!(!self.non_formal_flag);

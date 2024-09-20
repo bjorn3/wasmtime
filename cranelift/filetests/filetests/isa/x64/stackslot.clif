@@ -26,12 +26,14 @@ block0(v0: i64):
 ;   jnbe #trap=stk_ovf
 ;   subq    %rsp, $48, %rsp
 ; block0:
-;   lea     rsp(0 + virtual offset), %rax
-;   lea     rsp(16 + virtual offset), %rdx
-;   lea     rsp(24 + virtual offset), %r8
-;   lea     rsp(32 + virtual offset), %r9
+;   lea     rsp(0 + virtual offset), %r8
+;   lea     rsp(16 + virtual offset), %r9
+;   lea     rsp(24 + virtual offset), %r10
+;   lea     rsp(32 + virtual offset), %r11
 ;   movq    %r8, 0(%rdi)
 ;   movq    %r9, 8(%rdi)
+;   movq    %r10, 16(%rdi)
+;   movq    %r11, 24(%rdi)
 ;   addq    %rsp, $48, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -44,15 +46,17 @@ block0(v0: i64):
 ;   movq %rsi, %r10
 ;   addq $0x30, %r10
 ;   cmpq %rsp, %r10
-;   ja 0x3b
+;   ja 0x43
 ;   subq $0x30, %rsp
 ; block1: ; offset 0x18
-;   leaq (%rsp), %rax
-;   leaq 0x10(%rsp), %rdx
-;   leaq 0x18(%rsp), %r8
-;   leaq 0x20(%rsp), %r9
+;   leaq (%rsp), %r8
+;   leaq 0x10(%rsp), %r9
+;   leaq 0x18(%rsp), %r10
+;   leaq 0x20(%rsp), %r11
 ;   movq %r8, (%rdi)
 ;   movq %r9, 8(%rdi)
+;   movq %r10, 0x10(%rdi)
+;   movq %r11, 0x18(%rdi)
 ;   addq $0x30, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp

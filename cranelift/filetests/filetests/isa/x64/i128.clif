@@ -1244,16 +1244,17 @@ block0(v0: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdx, 0(%rdi)
-;   movq    %rsi, 8(%rdi)
-;   movq    %rdx, 16(%rdi)
-;   movq    %rsi, 24(%rdi)
+;   movq    %rsi, 0(%rdi)
+;   movq    %rdx, 8(%rdi)
+;   movq    %rsi, 16(%rdi)
+;   movq    %rdx, 24(%rdi)
 ;   movq    %rsi, 32(%rdi)
 ;   movq    %rdx, 40(%rdi)
 ;   movq    %rsi, 48(%rdi)
-;   movq    %rdx, 56(%rdi)
-;   movq    %rsi, %rcx
-;   movq    %rcx, %rax
+;   movq    %rsi, 56(%rdi)
+;   movq    %rdx, 64(%rdi)
+;   movq    %rsi, 72(%rdi)
+;   movq    %rdx, 80(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1263,16 +1264,17 @@ block0(v0: i128):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdx, (%rdi)
-;   movq %rsi, 8(%rdi)
-;   movq %rdx, 0x10(%rdi)
-;   movq %rsi, 0x18(%rdi)
+;   movq %rsi, (%rdi)
+;   movq %rdx, 8(%rdi)
+;   movq %rsi, 0x10(%rdi)
+;   movq %rdx, 0x18(%rdi)
 ;   movq %rsi, 0x20(%rdi)
 ;   movq %rdx, 0x28(%rdi)
 ;   movq %rsi, 0x30(%rdi)
-;   movq %rdx, 0x38(%rdi)
-;   movq %rsi, %rcx
-;   movq %rcx, %rax
+;   movq %rsi, 0x38(%rdi)
+;   movq %rdx, 0x40(%rdi)
+;   movq %rsi, 0x48(%rdi)
+;   movq %rdx, 0x50(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1287,18 +1289,24 @@ block0(v0: i128, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $32, %rsp
-;   movq    %r13, 16(%rsp)
+;   subq    %rsp, $48, %rsp
+;   movq    %r13, 32(%rsp)
 ; block0:
 ;   movq    %rdi, %r13
 ;   lea     0(%rsp), %rdi
 ;   load_ext_name %g+0, %r9
 ;   call    *%r9
-;   movq    0(%rsp), %r8
+;   movq    0(%rsp), %rsi
+;   movq    8(%rsp), %rax
+;   movq    16(%rsp), %rdx
+;   movq    24(%rsp), %r9
 ;   movq    %r13, %rdi
-;   movq    %r8, 0(%rdi)
-;   movq    16(%rsp), %r13
-;   addq    %rsp, $32, %rsp
+;   movq    %rsi, 0(%rdi)
+;   movq    %rax, 8(%rdi)
+;   movq    %rdx, 16(%rdi)
+;   movq    %r9, 24(%rdi)
+;   movq    32(%rsp), %r13
+;   addq    %rsp, $48, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1307,18 +1315,24 @@ block0(v0: i128, v1: i128):
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-;   subq $0x20, %rsp
-;   movq %r13, 0x10(%rsp)
+;   subq $0x30, %rsp
+;   movq %r13, 0x20(%rsp)
 ; block1: ; offset 0xd
 ;   movq %rdi, %r13
 ;   leaq (%rsp), %rdi
 ;   movabsq $0, %r9 ; reloc_external Abs8 %g 0
 ;   callq *%r9
-;   movq (%rsp), %r8
+;   movq (%rsp), %rsi
+;   movq 8(%rsp), %rax
+;   movq 0x10(%rsp), %rdx
+;   movq 0x18(%rsp), %r9
 ;   movq %r13, %rdi
-;   movq %r8, (%rdi)
-;   movq 0x10(%rsp), %r13
-;   addq $0x20, %rsp
+;   movq %rsi, (%rdi)
+;   movq %rax, 8(%rdi)
+;   movq %rdx, 0x10(%rdi)
+;   movq %r9, 0x18(%rdi)
+;   movq 0x20(%rsp), %r13
+;   addq $0x30, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
