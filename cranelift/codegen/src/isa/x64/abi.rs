@@ -383,6 +383,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let extra_arg_idx = if let Some(ret_area_ptr) = ret_area_ptr {
             args.push_non_formal(ret_area_ptr);
             Some(args.args().len() - 1)
+        } else if let Some(idx) =
+            params.iter().position(|param| param.purpose == ir::ArgumentPurpose::StructReturn)
+        {
+            Some(idx)
         } else {
             None
         };

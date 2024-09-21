@@ -15,9 +15,9 @@ use crate::ir::{
 };
 use crate::machinst::valueregs::InvalidSentinel;
 use crate::machinst::{
-    writable_value_regs, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder, Callee, InsnIndex,
-    LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
-    VCodeConstants, VCodeInst, ValueRegs, Writable,
+    writable_value_regs, ABIArg, ABIArgSlot, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder,
+    Callee, InsnIndex, LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant,
+    VCodeConstantData, VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
 use crate::settings::Flags;
 use crate::{trace, CodegenResult};
@@ -419,6 +419,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         }
 
+        /*
         // Find the sret register, if it's used.
         let mut sret_param = None;
         let mut sret_reg = None;
@@ -433,6 +434,22 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             sret_param = Some(param);
             sret_reg = Some(regs);
+        }*/
+
+        // Find the sret register, if it's used.
+        let mut sret_reg = None;
+        let abi_sig = vcode.sigs().abi_sig_for_signature(vcode.abi().signature());
+        if let Some(sret_param_idx) = vcode.sigs()[abi_sig].stack_ret_arg() {
+            match &vcode.sigs().args(abi_sig)[sret_param_idx as usize] {
+                ABIArg::Slots { slots, .. } => {
+                    assert_eq!(slots.len(), 1);
+                    match slots[0] {
+                        ABIArgSlot::Reg { reg, .. } => sret_reg = Some(ValueRegs::one(reg.into())),
+                        _ => unreachable!(),
+                    }
+                }
+                _ => unreachable!(),
+            }
         }
 
         // Compute instruction colors, find constant instructions, and find instructions with
@@ -463,7 +480,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             block_end_colors[bb] = InstColor::new(cur_color);
         }
 
-        let value_ir_uses = compute_use_states(f, sret_param);
+        let value_ir_uses = compute_use_states(f);
 
         Ok(Lower {
             f,
@@ -1045,10 +1062,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 /// Pre-analysis: compute `value_ir_uses`. See comment on
 /// `ValueUseState` for a description of what this analysis
 /// computes.
-fn compute_use_states(
-    f: &Function,
-    sret_param: Option<Value>,
-) -> SecondaryMap<Value, ValueUseState> {
+fn compute_use_states(f: &Function) -> SecondaryMap<Value, ValueUseState> {
     // We perform the analysis without recursion, so we don't
     // overflow the stack on long chains of ops in the input.
     //
@@ -1067,12 +1081,6 @@ fn compute_use_states(
     // efficient than a full indirect-use-counting pass.
 
     let mut value_ir_uses = SecondaryMap::with_default(ValueUseState::Unused);
-
-    if let Some(sret_param) = sret_param {
-        // There's an implicit use of the struct-return parameter in each
-        // copy of the function epilogue, which we count here.
-        value_ir_uses[sret_param] = ValueUseState::Multiple;
-    }
 
     // Stack of iterators over Values as we do DFS to mark
     // Multiple-state subtrees. The iterator type is whatever is

@@ -680,8 +680,13 @@ pub struct SigData {
     /// reduce the size of the struct.
     sized_stack_ret_space: u32,
 
-    /// Index in `args` of the stack-return-value-area argument.
-    stack_ret_arg: Option<u16>,
+    /// Index in `args` of the implicit stack-return-value-area argument.
+    implicit_stack_ret_arg: Option<u16>,
+
+    /// Index in `args` of the abi mandated stack-return-value-area return.
+    ///
+    /// This is unused outside of x86_64.
+    abi_stack_ret_ret: Option<u16>,
 
     /// Calling convention used.
     call_conv: isa::CallConv,
@@ -826,7 +831,7 @@ impl SigSet {
             .expect("must call `make_abi_sig_from_ir_signature` before `get_abi_sig_for_signature`")
     }
 
-    pub fn from_func_sig<M: ABIMachineSpec>(
+    fn from_func_sig<M: ABIMachineSpec>(
         &mut self,
         sig: &ir::Signature,
         flags: &settings::Flags,
