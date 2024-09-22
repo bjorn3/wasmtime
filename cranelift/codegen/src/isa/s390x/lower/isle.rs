@@ -5,29 +5,23 @@ pub mod generated_code;
 
 use crate::ir::ExternalName;
 // Types that the generated ISLE code uses via `use super::*`.
-use crate::isa::s390x::abi::{S390xMachineDeps, REG_SAVE_AREA_SIZE};
+use crate::isa::s390x::abi::{S390xCallSite, REG_SAVE_AREA_SIZE};
 use crate::isa::s390x::inst::{
     gpr, stack_reg, writable_gpr, zero_reg, Cond, Inst as MInst, LaneOrder, MemArg, MemArgPair,
     RegPair, ReturnCallInfo, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted, WritableRegPair,
 };
 use crate::isa::s390x::S390xBackend;
 use crate::machinst::isle::*;
-use crate::machinst::{CallInfo, MachLabel, Reg};
+use crate::machinst::{CallInfo, IsTailCall, MachLabel, Reg};
 use crate::{
     ir::{
-        condcodes::*, immediates::*, types::*, ArgumentExtension, ArgumentPurpose, AtomicRmwOp,
-        BlockCall, Endianness, Inst, InstructionData, KnownSymbol, LibCall, MemFlags, Opcode,
-        TrapCode, Value, ValueList,
+        condcodes::*, immediates::*, types::*, AtomicRmwOp, BlockCall, Endianness, Inst,
+        InstructionData, KnownSymbol, MemFlags, Opcode, TrapCode, Value, ValueList,
     },
-    isa::CallConv,
-    machinst::abi::ABIMachineSpec,
-    machinst::{
-        ArgPair, CallArgList, CallArgPair, CallRetList, CallRetPair, InstOutput, MachInst,
-        VCodeConstant, VCodeConstantData,
-    },
+    isa::{self, CallConv},
+    machinst::{ArgPair, InstOutput, MachInst, VCodeConstant, VCodeConstantData},
 };
 use regalloc2::PReg;
-use smallvec::smallvec;
 use std::boxed::Box;
 use std::cell::Cell;
 use std::vec::Vec;
@@ -42,7 +36,6 @@ type BoxSymbolReloc = Box<SymbolReloc>;
 type VecMInst = Vec<MInst>;
 type VecMInstBuilder = Cell<Vec<MInst>>;
 type VecArgPair = Vec<ArgPair>;
-type CallArgListBuilder = Cell<CallArgList>;
 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(
@@ -71,284 +64,7 @@ pub(crate) fn lower_branch(
 
 impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     isle_lower_prelude_methods!();
-
-    fn gen_return_call(
-        &mut self,
-        callee_sig: SigRef,
-        callee: ExternalName,
-        distance: RelocDistance,
-        args: ValueSlice,
-    ) -> InstOutput {
-        let _ = (callee_sig, callee, distance, args);
-        todo!()
-    }
-
-    fn gen_return_call_indirect(
-        &mut self,
-        callee_sig: SigRef,
-        callee: Value,
-        args: ValueSlice,
-    ) -> InstOutput {
-        let _ = (callee_sig, callee, args);
-        todo!()
-    }
-
-    #[inline]
-    fn args_builder_new(&mut self) -> CallArgListBuilder {
-        Cell::new(CallArgList::new())
-    }
-
-    #[inline]
-    fn args_builder_push(
-        &mut self,
-        builder: &CallArgListBuilder,
-        vreg: Reg,
-        preg: RealReg,
-    ) -> Unit {
-        let mut args = builder.take();
-        args.push(CallArgPair {
-            vreg,
-            preg: preg.into(),
-        });
-        builder.set(args);
-    }
-
-    #[inline]
-    fn args_builder_finish(&mut self, builder: &CallArgListBuilder) -> CallArgList {
-        builder.take()
-    }
-
-    fn defs_init(&mut self, abi: Sig) -> CallRetList {
-        // Allocate writable registers for all retval regs, except for StructRet args.
-        let mut defs = smallvec![];
-        for i in 0..self.lower_ctx.sigs().num_rets(abi) {
-            if let &ABIArg::Slots {
-                ref slots, purpose, ..
-            } = &self.lower_ctx.sigs().get_ret(abi, i)
-            {
-                if purpose == ArgumentPurpose::StructReturn {
-                    continue;
-                }
-                for slot in slots {
-                    match slot {
-                        &ABIArgSlot::Reg { reg, ty, .. } => {
-                            let value_regs = self.lower_ctx.alloc_tmp(ty);
-                            defs.push(CallRetPair {
-                                vreg: value_regs.only_reg().unwrap(),
-                                preg: reg.into(),
-                            });
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-        defs
-    }
-
-    fn defs_lookup(&mut self, defs: &CallRetList, reg: RealReg) -> Reg {
-        let reg = Reg::from(reg);
-        for def in defs {
-            if def.preg == reg {
-                return def.vreg.to_reg();
-            }
-        }
-        unreachable!()
-    }
-
-    fn abi_sig(&mut self, sig_ref: SigRef) -> Sig {
-        self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref)
-    }
-
-    fn abi_first_ret(&mut self, sig_ref: SigRef, abi: Sig) -> usize {
-        // Return the index of the first actual return value, excluding
-        // any StructReturn that might have been added to Sig.
-        let sig = &self.lower_ctx.dfg().signatures[sig_ref];
-        self.lower_ctx.sigs().num_rets(abi) - sig.returns.len()
-    }
-
-    fn abi_lane_order(&mut self, abi: Sig) -> LaneOrder {
-        lane_order_for_call_conv(self.lower_ctx.sigs()[abi].call_conv())
-    }
-
-    fn abi_call_stack_args(&mut self, abi: Sig) -> MemArg {
-        let sig_data = &self.lower_ctx.sigs()[abi];
-        if sig_data.call_conv() != CallConv::Tail {
-            // System ABI: outgoing arguments are at the bottom of the
-            // caller's frame (register save area included in offsets).
-            let arg_space = sig_data.sized_stack_arg_space() as u32;
-            self.lower_ctx
-                .abi_mut()
-                .accumulate_outgoing_args_size(arg_space);
-            MemArg::reg_plus_off(stack_reg(), 0, MemFlags::trusted())
-        } else {
-            // Tail-call ABI: outgoing arguments are at the top of the
-            // callee's frame; so we need to allocate that bit of this
-            // frame here, including a backchain copy if needed.
-            let arg_space = sig_data.sized_stack_arg_space() as u32;
-            if arg_space > 0 {
-                if self.backend.flags.preserve_frame_pointers() {
-                    let tmp = self.lower_ctx.alloc_tmp(I64).only_reg().unwrap();
-                    let src_mem = MemArg::reg(stack_reg(), MemFlags::trusted());
-                    let dst_mem = MemArg::reg(stack_reg(), MemFlags::trusted());
-                    self.emit(&MInst::Load64 {
-                        rd: tmp,
-                        mem: src_mem,
-                    });
-                    self.emit(&MInst::AllocateArgs { size: arg_space });
-                    self.emit(&MInst::Store64 {
-                        rd: tmp.to_reg(),
-                        mem: dst_mem,
-                    });
-                } else {
-                    self.emit(&MInst::AllocateArgs { size: arg_space });
-                }
-            }
-            MemArg::reg_plus_off(stack_reg(), arg_space.into(), MemFlags::trusted())
-        }
-    }
-
-    fn abi_call_stack_rets(&mut self, abi: Sig) -> MemArg {
-        let sig_data = &self.lower_ctx.sigs()[abi];
-        if sig_data.call_conv() != CallConv::Tail {
-            // System ABI: buffer for outgoing return values is just above
-            // the outgoing arguments.
-            let arg_space = sig_data.sized_stack_arg_space() as u32;
-            let ret_space = sig_data.sized_stack_ret_space() as u32;
-            self.lower_ctx
-                .abi_mut()
-                .accumulate_outgoing_args_size(arg_space + ret_space);
-            MemArg::reg_plus_off(stack_reg(), arg_space.into(), MemFlags::trusted())
-        } else {
-            // Tail-call ABI: buffer for outgoing return values is at the
-            // bottom of the caller's frame (above the register save area).
-            let ret_space = sig_data.sized_stack_ret_space() as u32;
-            self.lower_ctx
-                .abi_mut()
-                .accumulate_outgoing_args_size(REG_SAVE_AREA_SIZE + ret_space);
-            MemArg::NominalSPOffset {
-                off: REG_SAVE_AREA_SIZE as i64,
-            }
-        }
-    }
-
-    fn abi_return_call_stack_args(&mut self, abi: Sig) -> MemArg {
-        // Tail calls: outgoing arguments at the top of the caller's frame.
-        // Create a backchain copy if needed to ensure correct stack unwinding
-        // during the tail-call sequence.
-        let sig_data = &self.lower_ctx.sigs()[abi];
-        let arg_space = sig_data.sized_stack_arg_space() as u32;
-        self.lower_ctx
-            .abi_mut()
-            .accumulate_tail_args_size(arg_space);
-        if arg_space > 0 {
-            let tmp = self.lower_ctx.alloc_tmp(I64).only_reg().unwrap();
-            let src_mem = MemArg::InitialSPOffset { off: 0 };
-            let dst_mem = MemArg::InitialSPOffset {
-                off: -(arg_space as i64),
-            };
-            self.emit(&MInst::Load64 {
-                rd: tmp,
-                mem: src_mem,
-            });
-            self.emit(&MInst::Store64 {
-                rd: tmp.to_reg(),
-                mem: dst_mem,
-            });
-        }
-        MemArg::InitialSPOffset { off: 0 }
-    }
-
-    fn abi_call_info(
-        &mut self,
-        abi: Sig,
-        dest: ExternalName,
-        uses: &CallArgList,
-        defs: &CallRetList,
-    ) -> BoxCallInfo {
-        Box::new(self.abi_call_info_no_dest(abi, uses, defs).map(|()| dest))
-    }
-
-    fn abi_call_ind_info(
-        &mut self,
-        abi: Sig,
-        dest: Reg,
-        uses: &CallArgList,
-        defs: &CallRetList,
-    ) -> BoxCallIndInfo {
-        Box::new(self.abi_call_info_no_dest(abi, uses, defs).map(|()| dest))
-    }
-
-    fn abi_return_call_info(
-        &mut self,
-        abi: Sig,
-        name: ExternalName,
-        uses: &CallArgList,
-    ) -> BoxReturnCallInfo {
-        let sig_data = &self.lower_ctx.sigs()[abi];
-        let callee_pop_size = sig_data.sized_stack_arg_space() as u32;
-        Box::new(ReturnCallInfo {
-            dest: name.clone(),
-            uses: uses.clone(),
-            callee_pop_size,
-        })
-    }
-
-    fn abi_return_call_ind_info(
-        &mut self,
-        abi: Sig,
-        target: Reg,
-        uses: &CallArgList,
-    ) -> BoxReturnCallIndInfo {
-        let sig_data = &self.lower_ctx.sigs()[abi];
-        let callee_pop_size = sig_data.sized_stack_arg_space() as u32;
-        Box::new(ReturnCallInfo {
-            dest: target,
-            uses: uses.clone(),
-            callee_pop_size,
-        })
-    }
-
-    fn lib_call_info_memcpy(
-        &mut self,
-        dst: Reg,
-        src: Reg,
-        len: Reg,
-    ) -> Box<CallInfo<ExternalName>> {
-        let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
-        let callee_conv = CallConv::for_libcall(&self.backend.flags, caller_conv);
-
-        // Clobbers are defined by the calling convention. We will remove return value regs later.
-        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(callee_conv);
-
-        // Libcalls only require the register save area.
-        self.lower_ctx
-            .abi_mut()
-            .accumulate_outgoing_args_size(REG_SAVE_AREA_SIZE);
-
-        Box::new(CallInfo {
-            dest: ExternalName::LibCall(LibCall::Memcpy),
-            uses: smallvec![
-                CallArgPair {
-                    vreg: dst,
-                    preg: gpr(2),
-                },
-                CallArgPair {
-                    vreg: src,
-                    preg: gpr(3),
-                },
-                CallArgPair {
-                    vreg: len,
-                    preg: gpr(4),
-                },
-            ],
-            defs: smallvec![],
-            clobbers,
-            caller_conv,
-            callee_conv,
-            callee_pop_size: 0,
-        })
-    }
+    isle_prelude_caller_methods!(S390xCallSite);
 
     fn abi_for_elf_tls_get_offset(&mut self) {
         self.lower_ctx
@@ -864,16 +580,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
-    fn memarg_flags(&mut self, mem: &MemArg) -> MemFlags {
-        mem.get_flags()
-    }
-
-    #[inline]
-    fn memarg_offset(&mut self, base: &MemArg, offset: i64) -> MemArg {
-        MemArg::offset(base, offset)
-    }
-
-    #[inline]
     fn memarg_reg_plus_reg(&mut self, x: Reg, y: Reg, bias: u8, flags: MemFlags) -> MemArg {
         MemArg::BXD12 {
             base: x,
@@ -913,20 +619,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
             Some(off)
         } else {
             None
-        }
-    }
-
-    #[inline]
-    fn memarg_pair_from_memarg(&mut self, mem: &MemArg) -> Option<MemArgPair> {
-        MemArgPair::maybe_from_memarg(mem)
-    }
-
-    #[inline]
-    fn memarg_pair_from_reg(&mut self, reg: Reg, flags: MemFlags) -> MemArgPair {
-        MemArgPair {
-            base: reg,
-            disp: UImm12::zero(),
-            flags,
         }
     }
 
@@ -1025,34 +717,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn regpair_lo(&mut self, w: RegPair) -> Reg {
         w.lo
-    }
-}
-
-impl IsleContext<'_, '_, MInst, S390xBackend> {
-    fn abi_call_info_no_dest(
-        &mut self,
-        abi: Sig,
-        uses: &CallArgList,
-        defs: &CallRetList,
-    ) -> CallInfo<()> {
-        let sig_data = &self.lower_ctx.sigs()[abi];
-        // Get clobbers: all caller-saves. These may include return value
-        // regs, which we will remove from the clobber set later.
-        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(sig_data.call_conv());
-        let callee_pop_size = if sig_data.call_conv() == CallConv::Tail {
-            sig_data.sized_stack_arg_space() as u32
-        } else {
-            0
-        };
-        CallInfo {
-            dest: (),
-            uses: uses.clone(),
-            defs: defs.clone(),
-            clobbers,
-            callee_pop_size,
-            caller_conv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
-            callee_conv: self.lower_ctx.sigs()[abi].call_conv(),
-        }
     }
 }
 

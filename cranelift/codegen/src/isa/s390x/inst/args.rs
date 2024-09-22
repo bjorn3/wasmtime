@@ -138,39 +138,6 @@ pub struct MemArgPair {
     pub flags: MemFlags,
 }
 
-impl MemArgPair {
-    /// Convert a MemArg to a MemArgPair if possible.
-    pub fn maybe_from_memarg(mem: &MemArg) -> Option<MemArgPair> {
-        match mem {
-            &MemArg::BXD12 {
-                base,
-                index,
-                disp,
-                flags,
-            } => {
-                if index != zero_reg() {
-                    None
-                } else {
-                    Some(MemArgPair { base, disp, flags })
-                }
-            }
-            &MemArg::RegOffset { reg, off, flags } => {
-                if off < 0 {
-                    None
-                } else {
-                    let disp = UImm12::maybe_from_u64(off as u64)?;
-                    Some(MemArgPair {
-                        base: reg,
-                        disp,
-                        flags,
-                    })
-                }
-            }
-            _ => None,
-        }
-    }
-}
-
 //=============================================================================
 // Instruction sub-components (conditions, branches and branch targets):
 // definitions

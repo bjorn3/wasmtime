@@ -139,7 +139,7 @@ use crate::ir::MemFlags;
 use crate::ir::Signature;
 use crate::ir::Type;
 use crate::isa;
-use crate::isa::s390x::{inst::*, settings as s390x_settings};
+use crate::isa::s390x::{inst::*, settings as s390x_settings, S390xBackend};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
 use crate::settings;
@@ -147,12 +147,16 @@ use crate::CodegenResult;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
+use std::boxed::Box;
 use std::sync::OnceLock;
 
 // We use a generic implementation that factors out ABI commonalities.
 
 /// Support for the S390x ABI from the callee side (within a function body).
 pub type S390xCallee = Callee<S390xMachineDeps>;
+
+/// Support for the S390x ABI from the caller side (at a callsite).
+pub(crate) type S390xCallSite = CallSite<S390xMachineDeps>;
 
 /// ABI Register usage
 
@@ -782,8 +786,30 @@ impl ABIMachineSpec for S390xMachineDeps {
         insts
     }
 
-    fn gen_call(_dest: &CallDest, _tmp: Writable<Reg>, _info: CallInfo<()>) -> SmallVec<[Inst; 2]> {
-        unreachable!();
+    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Inst; 2]> {
+        let mut insts = SmallVec::new();
+        match dest {
+            &CallDest::ExtName(ref name, RelocDistance::Near) => {
+                let info = Box::new(info.map(|()| name.clone()));
+                insts.push(Inst::Call { info });
+            }
+            &CallDest::ExtName(ref name, RelocDistance::Far) => {
+                insts.push(Inst::LoadSymbolReloc {
+                    rd: tmp,
+                    symbol_reloc: Box::new(SymbolReloc::Absolute {
+                        name: name.clone(),
+                        offset: 0,
+                    }),
+                });
+                let info = Box::new(info.map(|()| tmp.to_reg()));
+                insts.push(Inst::CallInd { info });
+            }
+            &CallDest::Reg(reg) => {
+                let info = Box::new(info.map(|()| reg));
+                insts.push(Inst::CallInd { info });
+            }
+        }
+        insts
     }
 
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
@@ -950,6 +976,131 @@ impl S390xMachineDeps {
         insts.extend(gen_restore_gprs(call_conv, frame_layout, callee_pop_size));
 
         insts
+    }
+}
+
+/*
+fn abi_call_stack_rets(&mut self, abi: Sig) -> MemArg {
+    let sig_data = &self.lower_ctx.sigs()[abi];
+    if sig_data.call_conv() != CallConv::Tail {
+        // System ABI: buffer for outgoing return values is just above
+        // the outgoing arguments.
+        let arg_space = sig_data.sized_stack_arg_space() as u32;
+        let ret_space = sig_data.sized_stack_ret_space() as u32;
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(arg_space + ret_space);
+        MemArg::reg_plus_off(stack_reg(), arg_space.into(), MemFlags::trusted())
+    } else {
+        // Tail-call ABI: buffer for outgoing return values is at the
+        // bottom of the caller's frame (above the register save area).
+        let ret_space = sig_data.sized_stack_ret_space() as u32;
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(REG_SAVE_AREA_SIZE + ret_space);
+        MemArg::NominalSPOffset {
+            off: REG_SAVE_AREA_SIZE as i64,
+        }
+    }
+}
+
+fn abi_return_call_stack_args(&mut self, abi: Sig) -> MemArg {
+    // Tail calls: outgoing arguments at the top of the caller's frame.
+    // Create a backchain copy if needed to ensure correct stack unwinding
+    // during the tail-call sequence.
+    let sig_data = &self.lower_ctx.sigs()[abi];
+    let arg_space = sig_data.sized_stack_arg_space() as u32;
+    self.lower_ctx
+        .abi_mut()
+        .accumulate_tail_args_size(arg_space);
+    if arg_space > 0 {
+        let tmp = self.lower_ctx.alloc_tmp(I64).only_reg().unwrap();
+        let src_mem = MemArg::InitialSPOffset { off: 0 };
+        let dst_mem = MemArg::InitialSPOffset {
+            off: -(arg_space as i64),
+        };
+        self.emit(&MInst::Load64 {
+            rd: tmp,
+            mem: src_mem,
+        });
+        self.emit(&MInst::Store64 {
+            rd: tmp.to_reg(),
+            mem: dst_mem,
+        });
+    }
+    MemArg::InitialSPOffset { off: 0 }
+}
+*/
+
+impl S390xCallSite {
+    pub fn emit_return_call(
+        mut self,
+        ctx: &mut Lower<Inst>,
+        args: isle::ValueSlice,
+        _backend: &S390xBackend,
+    ) {
+        let new_stack_arg_size =
+            u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
+
+        ctx.abi_mut().accumulate_tail_args_size(new_stack_arg_size);
+        if new_stack_arg_size > 0 {
+            let tmp = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+            let src_mem = MemArg::InitialSPOffset { off: 0 };
+            let dst_mem = MemArg::InitialSPOffset {
+                off: -(new_stack_arg_size as i64),
+            };
+            ctx.emit(Inst::Load64 {
+                rd: tmp,
+                mem: src_mem,
+            });
+            ctx.emit(Inst::Store64 {
+                rd: tmp.to_reg(),
+                mem: dst_mem,
+            });
+        }
+
+        // Put all arguments in registers and stack slots (within that newly
+        // allocated stack space).
+        self.emit_args(ctx, args);
+        self.emit_stack_ret_arg_for_tail_call(ctx);
+
+        let dest = self.dest().clone();
+        let uses = self.take_uses();
+
+        match dest {
+            CallDest::ExtName(callee, RelocDistance::Near) => {
+                let info = Box::new(ReturnCallInfo {
+                    dest: callee,
+                    uses,
+                    callee_pop_size: new_stack_arg_size,
+                });
+                ctx.emit(Inst::ReturnCall { info });
+            }
+            CallDest::ExtName(name, RelocDistance::Far) => {
+                let callee = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                ctx.emit(Inst::LoadSymbolReloc {
+                    rd: callee,
+                    symbol_reloc: Box::new(SymbolReloc::Absolute {
+                        name: name.clone(),
+                        offset: 0,
+                    }),
+                });
+                let info = Box::new(ReturnCallInfo {
+                    dest: callee.to_reg(),
+                    uses,
+                    callee_pop_size: new_stack_arg_size,
+                });
+                ctx.emit(Inst::ReturnCallInd { info });
+            }
+            CallDest::Reg(callee) => {
+                let info = Box::new(ReturnCallInfo {
+                    dest: callee,
+                    uses,
+                    callee_pop_size: new_stack_arg_size,
+                });
+                ctx.emit(Inst::ReturnCallInd { info });
+            }
+        }
     }
 }
 

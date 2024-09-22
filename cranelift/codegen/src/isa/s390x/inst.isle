@@ -1772,9 +1772,6 @@
 
 (type MemArg extern (enum))
 
-(decl memarg_flags (MemArg) MemFlags)
-(extern constructor memarg_flags memarg_flags)
-
 (decl memarg_reg_plus_reg (Reg Reg u8 MemFlags) MemArg)
 (extern constructor memarg_reg_plus_reg memarg_reg_plus_reg)
 
@@ -1786,10 +1783,6 @@
 
 (decl memarg_got () MemArg)
 (extern constructor memarg_got memarg_got)
-
-;; Add an offset to a virtual MemArg.
-(decl memarg_offset (MemArg i64) MemArg)
-(extern constructor memarg_offset memarg_offset)
 
 ;; Form the sum of two offset values, and check that the result is
 ;; a valid `MemArg::Symbol` offset (i.e. is even and fits into i32).
@@ -1859,20 +1852,6 @@
 ;; Accessors for `MemArgPair`.
 
 (type MemArgPair extern (enum))
-
-;; Convert a MemArg to a MemArgPair, reloading the address if necessary.
-(decl memarg_pair (MemArg) MemArgPair)
-(rule 1 (memarg_pair (memarg_pair_from_memarg mem)) mem)
-(rule (memarg_pair mem) (memarg_pair_from_reg
-                          (load_addr mem) (memarg_flags mem)))
-
-;; Convert a MemArg to a MemArgPair if no reloading is necessary.
-(decl memarg_pair_from_memarg (MemArgPair) MemArg)
-(extern extractor memarg_pair_from_memarg memarg_pair_from_memarg)
-
-;; Create a MemArgPair from a single base register.
-(decl memarg_pair_from_reg (Reg MemFlags) MemArgPair)
-(extern constructor memarg_pair_from_reg memarg_pair_from_reg)
 
 
 ;; Helpers for stack-slot addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2694,26 +2673,6 @@
             (_ Unit (emit (MInst.LoadAddr dst mem))))
         dst))
 
-;; Helper for emitting `MInst.Call` instructions.
-(decl call_impl (BoxCallInfo) SideEffectNoResult)
-(rule (call_impl info)
-      (SideEffectNoResult.Inst (MInst.Call info)))
-
-;; Helper for emitting `MInst.CallInd` instructions.
-(decl call_ind_impl (BoxCallIndInfo) SideEffectNoResult)
-(rule (call_ind_impl info)
-      (SideEffectNoResult.Inst (MInst.CallInd info)))
-
-;; Helper for emitting `MInst.ReturnCall` instructions.
-(decl return_call_impl (BoxReturnCallInfo) SideEffectNoResult)
-(rule (return_call_impl info)
-      (SideEffectNoResult.Inst (MInst.ReturnCall info)))
-
-;; Helper for emitting `MInst.ReturnCallInd` instructions.
-(decl return_call_ind_impl (BoxReturnCallIndInfo) SideEffectNoResult)
-(rule (return_call_ind_impl info)
-      (SideEffectNoResult.Inst (MInst.ReturnCallInd info)))
-
 ;; Helper for emitting `MInst.Jump` instructions.
 (decl jump_impl (MachLabel) SideEffectNoResult)
 (rule (jump_impl target)
@@ -2911,76 +2870,6 @@
 (rule 1 (abi_vec_elt_rev callee_lane_order (ty_vec128 ty) reg)
       (if-let $false (lane_order_equal callee_lane_order (lane_order)))
       (vec_elt_rev ty reg))
-
-;; Helpers to emit a memory copy (MVC or memcpy libcall).
-(decl memcpy (MemArg MemArg u64) SideEffectNoResult)
-(rule 1 (memcpy dst src (len_minus_one len))
-      (mvc (memarg_pair dst) (memarg_pair src) len))
-(rule (memcpy dst src len)
-      (lib_call
-        (lib_call_info_memcpy (load_addr dst) (load_addr src) (imm $I64 len))))
-
-;; Prepare a stack copy of a single (oversized) argument.
-(decl copy_to_buffer (MemArg ABIArg Value) InstOutput)
-(rule 2 (copy_to_buffer base (abi_arg_only_slot slot) _) (output_none))
-(rule 0 (copy_to_buffer base (abi_arg_implicit_pointer _ offset ty)
-                      val @ (value_type ty))
-      (side_effect (arg_store ty val (memarg_offset base offset))))
-
-;; Copy a single argument/return value to its slots.
-;; For oversized arguments, set the slot to the buffer address.
-(decl copy_to_arg (CallArgListBuilder LaneOrder MemArg ABIArg Value) InstOutput)
-(rule 2 (copy_to_arg uses lo base (abi_arg_only_slot slot) val)
-      (copy_reg_to_arg_slot uses lo base slot (prepare_arg_val slot val)))
-(rule 0 (copy_to_arg uses lo base (abi_arg_implicit_pointer slot offset _) _)
-      (let ((ptr Reg (load_addr (memarg_offset base offset))))
-        (copy_reg_to_arg_slot uses lo base slot ptr)))
-
-;; Copy a single argument/return value from its slots.
-(decl copy_from_arg (CallRetList LaneOrder MemArg ABIArg) ValueRegs)
-(rule (copy_from_arg defs lo base (abi_arg_only_slot slot))
-      (value_reg (copy_reg_from_arg_slot defs lo base slot)))
-
-;; Place one component of an argument/return value into a register.
-;; Copy reference values into registers of integer type.
-;; Zero- or sign-extend as required by the ABI.
-(decl prepare_arg_val (ABIArgSlot Value) Reg)
-(rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.None)) val)
-      val)
-(rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.Uext)) val)
-      (put_in_reg_zext64 val))
-(rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.Sext)) val)
-      (put_in_reg_sext64 val))
-(rule (prepare_arg_val (ABIArgSlot.Stack _ _ (ArgumentExtension.None)) val)
-      val)
-(rule (prepare_arg_val (ABIArgSlot.Stack _ _ (ArgumentExtension.Uext)) val)
-      (put_in_reg_zext64 val))
-(rule (prepare_arg_val (ABIArgSlot.Stack _ _ (ArgumentExtension.Sext)) val)
-      (put_in_reg_sext64 val))
-
-;; Copy one component of an argument/return value to its slot, where the
-;; value is already extended and present in a register.
-(decl copy_reg_to_arg_slot (CallArgListBuilder LaneOrder MemArg ABIArgSlot Reg) InstOutput)
-(rule (copy_reg_to_arg_slot uses lo _ (ABIArgSlot.Reg reg ty ext) src)
-      (let ((_ Unit (args_builder_push uses (abi_vec_elt_rev lo ty src) reg)))
-        (output_none)))
-(rule (copy_reg_to_arg_slot _ lo base (ABIArgSlot.Stack offset ty ext) src)
-      (side_effect (arg_store (abi_ext_ty ext ty) (abi_vec_elt_rev lo ty src)
-                              (memarg_offset base offset))))
-
-;; Copy one component of an argument/return value from its slot.
-(decl copy_reg_from_arg_slot (CallRetList LaneOrder MemArg ABIArgSlot) Reg)
-(rule (copy_reg_from_arg_slot defs lo _ (ABIArgSlot.Reg reg ty ext))
-      (abi_vec_elt_rev lo ty (defs_lookup defs reg)))
-(rule (copy_reg_from_arg_slot _ lo base (ABIArgSlot.Stack offset ty ext))
-      (abi_vec_elt_rev lo ty (arg_load (abi_ext_ty ext ty)
-                                       (memarg_offset base offset))))
-
-;; Helper to compute the type of an implicitly extended argument/return value.
-(decl abi_ext_ty (ArgumentExtension Type) Type)
-(rule 0 (abi_ext_ty _ ty) ty)
-(rule 1 (abi_ext_ty (ArgumentExtension.Uext) (gpr32_ty _)) $I64)
-(rule 1 (abi_ext_ty (ArgumentExtension.Sext) (gpr32_ty _)) $I64)
 
 
 ;; Helpers for generating immediate values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3522,92 +3411,13 @@
         (casloop_emit ib ty flags aligned_addr val)))
 
 
-;; Helpers for generating `call` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Partial (mutable) argument list in the process of being created.
-(type CallArgListBuilder extern (enum))
+(decl gen_call (SigRef ExternalName RelocDistance ValueSlice) InstOutput)
+(extern constructor gen_call gen_call)
 
-;; Create a new empty instruction sequence builder.
-(decl args_builder_new () CallArgListBuilder)
-(extern constructor args_builder_new args_builder_new)
-
-;; Push an instruction to a sequence under construction.
-(decl args_builder_push (CallArgListBuilder Reg RealReg) Unit)
-(extern constructor args_builder_push args_builder_push)
-
-;; Complete the sequence under construction.
-(decl args_builder_finish (CallArgListBuilder) CallArgList)
-(extern constructor args_builder_finish args_builder_finish)
-
-;; List of return registers for a call instnuction.
-(type CallRetList extern (enum))
-
-;; Initialize return register list.
-(decl defs_init (Sig) CallRetList)
-(extern constructor defs_init defs_init)
-
-;; Look up return register in list.
-(decl defs_lookup (CallRetList RealReg) Reg)
-(extern constructor defs_lookup defs_lookup)
-
-(decl abi_sig (SigRef) Sig)
-(extern constructor abi_sig abi_sig)
-
-(decl abi_first_ret (SigRef Sig) usize)
-(extern constructor abi_first_ret abi_first_ret)
-
-(decl abi_call_info (Sig ExternalName CallArgList CallRetList) BoxCallInfo)
-(extern constructor abi_call_info abi_call_info)
-
-(decl abi_call_ind_info (Sig Reg CallArgList CallRetList) BoxCallIndInfo)
-(extern constructor abi_call_ind_info abi_call_ind_info)
-
-(decl abi_return_call_info (Sig ExternalName CallArgList) BoxReturnCallInfo)
-(extern constructor abi_return_call_info abi_return_call_info)
-
-(decl abi_return_call_ind_info (Sig Reg CallArgList) BoxReturnCallIndInfo)
-(extern constructor abi_return_call_ind_info abi_return_call_ind_info)
-
-(decl abi_call_stack_args (Sig) MemArg)
-(extern constructor abi_call_stack_args abi_call_stack_args)
-
-(decl abi_call_stack_rets (Sig) MemArg)
-(extern constructor abi_call_stack_rets abi_call_stack_rets)
-
-(decl abi_return_call_stack_args (Sig) MemArg)
-(extern constructor abi_return_call_stack_args abi_return_call_stack_args)
-
-(decl abi_call (Sig ExternalName CallArgList CallRetList) SideEffectNoResult)
-(rule (abi_call abi name uses defs)
-      (call_impl (abi_call_info abi name uses defs)))
-
-(decl abi_call_ind (Sig Reg CallArgList CallRetList) SideEffectNoResult)
-(rule (abi_call_ind abi target uses defs)
-      (call_ind_impl (abi_call_ind_info abi target uses defs)))
-
-(decl abi_return_call (Sig ExternalName CallArgList) SideEffectNoResult)
-(rule (abi_return_call abi name uses)
-      (return_call_impl (abi_return_call_info abi name uses)))
-
-(decl abi_return_call_ind (Sig Reg CallArgList) SideEffectNoResult)
-(rule (abi_return_call_ind abi target uses)
-      (return_call_ind_impl (abi_return_call_ind_info abi target uses)))
-
-(decl abi_lane_order (Sig) LaneOrder)
-(extern constructor abi_lane_order abi_lane_order)
-
-
-;; Helpers for generating calls to library routines ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(type LibCallInfo extern (enum))
-
-(decl lib_call_info_memcpy (Reg Reg Reg) BoxCallInfo)
-(extern constructor lib_call_info_memcpy lib_call_info_memcpy)
-
-(decl lib_call (BoxCallInfo) SideEffectNoResult)
-(rule (lib_call info)
-      (call_impl info))
-
+(decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
+(extern constructor gen_call_indirect gen_call_indirect)
 
 ;; Helpers for generating vector pack and unpack instructions ;;;;;;;;;;;;;;;;;;
 
