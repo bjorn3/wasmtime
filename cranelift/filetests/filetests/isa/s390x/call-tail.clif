@@ -14,27 +14,20 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
 ; block0:
 ;   bras %r1, 12 ; data %g + 0 ; lg %r5, 0(%r1)
 ;   basr %r14, %r5
-;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stmg %r14, %r15, 0x70(%r15)
-;   aghi %r15, -0xa0
-; block1: ; offset 0xa
-;   bras %r1, 0x16
+;   bras %r1, 0xc
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   lg %r5, 0(%r1)
 ;   basr %r14, %r5
-;   lmg %r14, %r15, 0x110(%r15)
 ;   br %r14
 
 function %call_colocated(i64) -> i64 tail {
@@ -46,20 +39,13 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
 ; block0:
 ;   brasl %r14, %g
-;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stmg %r14, %r15, 0x70(%r15)
-;   aghi %r15, -0xa0
-; block1: ; offset 0xa
-;   brasl %r14, 0xa ; reloc_external PLTRel32Dbl %g 2
-;   lmg %r14, %r15, 0x110(%r15)
+;   brasl %r14, 0 ; reloc_external PLTRel32Dbl %g 2
 ;   br %r14
 
 function %call_indirect(i64, i64) -> i64 tail {
@@ -70,20 +56,13 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
 ; block0:
 ;   basr %r14, %r3
-;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stmg %r14, %r15, 0x70(%r15)
-;   aghi %r15, -0xa0
-; block1: ; offset 0xa
 ;   basr %r14, %r3
-;   lmg %r14, %r15, 0x110(%r15)
 ;   br %r14
 
 function %incoming_args(i64, i32, i32 uext, i32 sext, i16, i16 uext, i16 sext, i8, i8 uext, i8 sext) -> i64 tail {

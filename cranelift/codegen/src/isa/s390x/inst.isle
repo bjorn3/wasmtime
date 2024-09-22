@@ -888,6 +888,7 @@
       (lane_imm u8))
 
     ;; Allocate stack space for outgoing tail-call arguments.
+    ;; FIXME Merge this into the call instruction itself
     (AllocateArgs
       (size u32))
 

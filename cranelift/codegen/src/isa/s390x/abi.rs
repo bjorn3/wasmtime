@@ -980,6 +980,43 @@ impl S390xMachineDeps {
 }
 
 /*
+fn abi_call_stack_args(&mut self, abi: Sig) -> MemArg {
+    let sig_data = &self.lower_ctx.sigs()[abi];
+    if sig_data.call_conv() != CallConv::Tail {
+        // System ABI: outgoing arguments are at the bottom of the
+        // caller's frame (register save area included in offsets).
+        let arg_space = sig_data.sized_stack_arg_space() as u32;
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(arg_space);
+        MemArg::reg_plus_off(stack_reg(), 0, MemFlags::trusted())
+    } else {
+        // Tail-call ABI: outgoing arguments are at the top of the
+        // callee's frame; so we need to allocate that bit of this
+        // frame here, including a backchain copy if needed.
+        let arg_space = sig_data.sized_stack_arg_space() as u32;
+        if arg_space > 0 {
+            if self.backend.flags.preserve_frame_pointers() {
+                let tmp = self.lower_ctx.alloc_tmp(I64).only_reg().unwrap();
+                let src_mem = MemArg::reg(stack_reg(), MemFlags::trusted());
+                let dst_mem = MemArg::reg(stack_reg(), MemFlags::trusted());
+                self.emit(&MInst::Load64 {
+                    rd: tmp,
+                    mem: src_mem,
+                });
+                self.emit(&MInst::AllocateArgs { size: arg_space });
+                self.emit(&MInst::Store64 {
+                    rd: tmp.to_reg(),
+                    mem: dst_mem,
+                });
+            } else {
+                self.emit(&MInst::AllocateArgs { size: arg_space });
+            }
+        }
+        MemArg::reg_plus_off(stack_reg(), arg_space.into(), MemFlags::trusted())
+    }
+}
+
 fn abi_call_stack_rets(&mut self, abi: Sig) -> MemArg {
     let sig_data = &self.lower_ctx.sigs()[abi];
     if sig_data.call_conv() != CallConv::Tail {
@@ -1058,6 +1095,11 @@ impl S390xCallSite {
                 mem: dst_mem,
             });
         }
+        let callee_pop_size = if self.sig(ctx.sigs()).call_conv() == isa::CallConv::Tail {
+            self.sig(ctx.sigs()).sized_stack_arg_space() as u32
+        } else {
+            0
+        };
 
         // Put all arguments in registers and stack slots (within that newly
         // allocated stack space).
@@ -1072,7 +1114,7 @@ impl S390xCallSite {
                 let info = Box::new(ReturnCallInfo {
                     dest: callee,
                     uses,
-                    callee_pop_size: new_stack_arg_size,
+                    callee_pop_size,
                 });
                 ctx.emit(Inst::ReturnCall { info });
             }
@@ -1088,7 +1130,7 @@ impl S390xCallSite {
                 let info = Box::new(ReturnCallInfo {
                     dest: callee.to_reg(),
                     uses,
-                    callee_pop_size: new_stack_arg_size,
+                    callee_pop_size,
                 });
                 ctx.emit(Inst::ReturnCallInd { info });
             }
@@ -1096,7 +1138,7 @@ impl S390xCallSite {
                 let info = Box::new(ReturnCallInfo {
                     dest: callee,
                     uses,
-                    callee_pop_size: new_stack_arg_size,
+                    callee_pop_size,
                 });
                 ctx.emit(Inst::ReturnCallInd { info });
             }
