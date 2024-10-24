@@ -3,7 +3,6 @@
 use crate::ir::{self, types, LibCall, MemFlags, Signature, TrapCode};
 use crate::ir::{types::*, ExternalName};
 use crate::isa;
-use crate::isa::winch;
 use crate::isa::x64::X64Backend;
 use crate::isa::{unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings, CallConv};
 use crate::machinst::abi::*;
@@ -15,6 +14,7 @@ use alloc::vec::Vec;
 use args::*;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
+use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 /// Support for the x64 ABI from the callee side (within a function body).
@@ -99,9 +99,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         flags: &settings::Flags,
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
-        add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
-    ) -> CodegenResult<(u32, Option<usize>)> {
+    ) -> CodegenResult<u32> {
         let is_fastcall = call_conv == CallConv::WindowsFastcall;
 
         let mut next_gpr = 0;
@@ -117,39 +116,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-160)
             next_stack = 32;
         }
-
-        let ret_area_ptr = if add_ret_area_ptr {
-            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
-            next_gpr += 1;
-            next_param_idx += 1;
-            // In the SystemV and WindowsFastcall ABIs, the return area pointer is the first
-            // argument. For the Tail and Winch ABIs we do the same for simplicity sake.
-            Some(ABIArg::reg(
-                get_intreg_for_arg(call_conv, 0, 0)
-                    .unwrap()
-                    .to_real_reg()
-                    .unwrap(),
-                types::I64,
-                ir::ArgumentExtension::None,
-                ir::ArgumentPurpose::Normal,
-            ))
-        } else {
-            None
-        };
-
-        // If any param uses extension, the winch calling convention will not pack its results
-        // on the stack and will instead align them to 8-byte boundaries the same way that all the
-        // other calling conventions do. This isn't consistent with Winch itself, but is fine as
-        // Winch only uses this calling convention via trampolines, and those trampolines don't add
-        // extension annotations. Additionally, handling extension attributes this way allows clif
-        // functions that use them with the Winch calling convention to interact successfully with
-        // testing infrastructure.
-        // The results are also not packed if any of the types are `f16`. This is to simplify the
-        // implementation of `Inst::load`/`Inst::store` (which would otherwise require multiple
-        // instructions), and doesn't affect Winch itself as Winch doesn't support `f16` at all.
-        let uses_extension = params
-            .iter()
-            .any(|p| p.extension != ir::ArgumentExtension::None || p.value_type == types::F16);
 
         for (ix, param) in params.iter().enumerate() {
             let last_param = ix == params.len() - 1;
@@ -337,20 +303,17 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         extension: param.extension,
                     });
                 } else {
-                    let size = reg_ty.bytes();
-                    let size = if call_conv == CallConv::Winch
-                        && args_or_rets == ArgsOrRets::Rets
-                        && !uses_extension
-                    {
-                        size
-                    } else {
-                        let size = std::cmp::max(size, 8);
+                    if args_or_rets == ArgsOrRets::Rets {
+                        return Err(crate::CodegenError::Unsupported(
+                            "too many return values".to_owned(),
+                        ));
+                    }
 
-                        // Align.
-                        debug_assert!(size.is_power_of_two());
-                        next_stack = align_to(next_stack, size);
-                        size
-                    };
+                    let size = std::cmp::max(reg_ty.bytes(), 8);
+
+                    // Align.
+                    debug_assert!(size.is_power_of_two());
+                    next_stack = align_to(next_stack, size);
 
                     slots.push(ABIArgSlot::Stack {
                         offset: next_stack as i64,
@@ -380,22 +343,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 }
             }
         }
-        let extra_arg_idx = if let Some(ret_area_ptr) = ret_area_ptr {
-            args.push_non_formal(ret_area_ptr);
-            Some(args.args().len() - 1)
-        } else {
-            None
-        };
-
-        // Winch writes the first result to the highest offset, so we need to iterate through the
-        // args and adjust the offsets down.
-        if call_conv == CallConv::Winch && args_or_rets == ArgsOrRets::Rets {
-            winch::reverse_stack(args, next_stack, uses_extension);
-        }
 
         next_stack = align_to(next_stack, 16);
 
-        Ok((next_stack, extra_arg_idx))
+        Ok(next_stack)
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I {
@@ -978,7 +929,6 @@ impl X64CallSite {
         // Put all arguments in registers and stack slots (within that newly
         // allocated stack space).
         self.emit_args(ctx, args);
-        self.emit_stack_ret_arg_for_tail_call(ctx);
 
         // Finally, do the actual tail call!
         let dest = self.dest().clone();

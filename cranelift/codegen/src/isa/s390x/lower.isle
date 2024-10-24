@@ -3896,8 +3896,7 @@
       (let ((uses CallArgListBuilder (args_builder_new))
             (stack MemArg (abi_call_stack_args abi))
             (_ InstOutput (lower_call_args_buffer abi stack range args))
-            (_ InstOutput (lower_call_args_slots abi uses stack range args))
-            (_ InstOutput (lower_call_ret_arg abi uses stack)))
+            (_ InstOutput (lower_call_args_slots abi uses stack range args)))
         (args_builder_finish uses)))
 
 ;; Lower function return values by collecting them from registers / stack slots.
@@ -3939,8 +3938,7 @@
       (let ((uses CallArgListBuilder (args_builder_new))
             (stack MemArg (abi_return_call_stack_args abi))
             (_ InstOutput (lower_call_args_buffer abi stack range args))
-            (_ InstOutput (lower_call_args_slots abi uses stack range args))
-            (_ InstOutput (lower_return_call_ret_arg abi uses stack)))
+            (_ InstOutput (lower_call_args_slots abi uses stack range args)))
         (args_builder_finish uses)))
 
 
@@ -3962,20 +3960,6 @@
                                        stack (abi_get_arg abi head)
                                        (value_slice_get args head))))
         (lower_call_args_slots abi uses stack tail args)))
-
-;; Lower function arguments (part 3): implicit return-area pointer (call).
-(decl lower_call_ret_arg (Sig CallArgListBuilder MemArg) InstOutput)
-(rule (lower_call_ret_arg (abi_no_ret_arg) _ _) (output_none))
-(rule 1 (lower_call_ret_arg abi @ (abi_ret_arg (abi_arg_only_slot slot)) uses stack)
-      (copy_reg_to_arg_slot uses (abi_lane_order abi)
-                            stack slot (load_addr (abi_call_stack_rets abi))))
-
-;; Lower function arguments (part 3): implicit return-area pointer (return call).
-(decl lower_return_call_ret_arg (Sig CallArgListBuilder MemArg) InstOutput)
-(rule (lower_return_call_ret_arg (abi_no_ret_arg) _ _) (output_none))
-(rule 1 (lower_return_call_ret_arg abi @ (abi_ret_arg (abi_arg_only_slot slot)) uses stack)
-      (copy_reg_to_arg_slot uses (abi_lane_order abi)
-                            stack slot (abi_unwrap_ret_area_ptr)))
 
 
 ;;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;

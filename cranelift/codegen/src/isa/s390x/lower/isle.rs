@@ -214,18 +214,16 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
             // System ABI: buffer for outgoing return values is just above
             // the outgoing arguments.
             let arg_space = sig_data.sized_stack_arg_space() as u32;
-            let ret_space = sig_data.sized_stack_ret_space() as u32;
             self.lower_ctx
                 .abi_mut()
-                .accumulate_outgoing_args_size(arg_space + ret_space);
+                .accumulate_outgoing_args_size(arg_space);
             MemArg::reg_plus_off(stack_reg(), arg_space.into(), MemFlags::trusted())
         } else {
             // Tail-call ABI: buffer for outgoing return values is at the
             // bottom of the caller's frame (above the register save area).
-            let ret_space = sig_data.sized_stack_ret_space() as u32;
             self.lower_ctx
                 .abi_mut()
-                .accumulate_outgoing_args_size(REG_SAVE_AREA_SIZE + ret_space);
+                .accumulate_outgoing_args_size(REG_SAVE_AREA_SIZE);
             MemArg::NominalSPOffset {
                 off: REG_SAVE_AREA_SIZE as i64,
             }

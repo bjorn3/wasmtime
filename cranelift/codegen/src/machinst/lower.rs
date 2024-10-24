@@ -527,14 +527,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     self.emit(insn);
                 }
             }
-            if let Some(insn) = self
-                .vcode
-                .vcode
-                .abi
-                .gen_retval_area_setup(&self.vcode.vcode.sigs, &mut self.vregs)
-            {
-                self.emit(insn);
-            }
 
             // The `args` instruction below must come first. Finish
             // the current "IR inst" (with a default source location,
@@ -948,8 +940,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<VCode<I>> {
         trace!("about to lower function: {:?}", self.f);
-
-        self.vcode.init_retval_area(&mut self.vregs)?;
 
         // Get the pinned reg here (we only parameterize this function on `B`,
         // not the whole `Lower` impl).

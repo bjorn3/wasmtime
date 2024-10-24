@@ -85,7 +85,6 @@ mod pulley_shared;
 pub mod unwind;
 
 mod call_conv;
-mod winch;
 
 /// Returns a builder that can create a corresponding `TargetIsa`
 /// or `Err(LookupError::SupportDisabled)` if not enabled.

@@ -147,6 +147,7 @@ use crate::CodegenResult;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
+use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 // We use a generic implementation that factors out ABI commonalities.
@@ -293,9 +294,8 @@ impl ABIMachineSpec for S390xMachineDeps {
         _flags: &settings::Flags,
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
-        add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
-    ) -> CodegenResult<(u32, Option<usize>)> {
+    ) -> CodegenResult<u32> {
         assert_ne!(
             call_conv,
             isa::CallConv::Winch,
@@ -314,22 +314,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         if call_conv != isa::CallConv::Tail && args_or_rets == ArgsOrRets::Args {
             next_stack = REG_SAVE_AREA_SIZE;
         }
-
-        let ret_area_ptr = if add_ret_area_ptr {
-            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
-            next_gpr += 1;
-            Some(ABIArg::reg(
-                get_intreg_for_arg(call_conv, 0)
-                    .unwrap()
-                    .to_real_reg()
-                    .unwrap(),
-                types::I64,
-                ir::ArgumentExtension::None,
-                ir::ArgumentPurpose::Normal,
-            ))
-        } else {
-            None
-        };
 
         for mut param in params.into_iter().copied() {
             if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
@@ -384,6 +368,12 @@ impl ABIMachineSpec for S390xMachineDeps {
                     extension: param.extension,
                 }
             } else {
+                if args_or_rets == ArgsOrRets::Rets {
+                    return Err(crate::CodegenError::Unsupported(
+                        "too many return values".to_owned(),
+                    ));
+                }
+
                 // Compute size. Every argument or return value takes a slot of
                 // at least 8 bytes.
                 let size = (ty_bits(param.value_type) / 8) as u32;
@@ -431,13 +421,6 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         next_stack = align_to(next_stack, 8);
 
-        let extra_arg = if let Some(ret_area_ptr) = ret_area_ptr {
-            args.push_non_formal(ret_area_ptr);
-            Some(args.args().len() - 1)
-        } else {
-            None
-        };
-
         // After all arguments are in their well-defined location,
         // allocate buffers for all ImplicitPtrArg arguments.
         for arg in args.args_mut() {
@@ -454,7 +437,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         // With the tail-call convention, arguments are passed in the *callee*'s
         // frame instead of the caller's frame.  Update all offsets accordingly
         // (note that resulting offsets will all be negative).
-        if call_conv == isa::CallConv::Tail && args_or_rets == ArgsOrRets::Args && next_stack != 0 {
+        if call_conv == isa::CallConv::Tail && next_stack != 0 {
             for arg in args.args_mut() {
                 match arg {
                     ABIArg::Slots { slots, .. } => {
@@ -479,7 +462,7 @@ impl ABIMachineSpec for S390xMachineDeps {
             next_stack += REG_SAVE_AREA_SIZE;
         }
 
-        Ok((next_stack, extra_arg))
+        Ok(next_stack)
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {

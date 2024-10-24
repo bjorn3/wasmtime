@@ -8,7 +8,6 @@ use crate::ir::{dynamic_to_fixed, ExternalName, LibCall, Signature};
 use crate::isa;
 use crate::isa::aarch64::{inst::*, settings as aarch64_settings, AArch64Backend};
 use crate::isa::unwind::UnwindInst;
-use crate::isa::winch;
 use crate::machinst::*;
 use crate::settings;
 use crate::CodegenResult;
@@ -16,6 +15,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
+use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 // We use a generic implementation that factors out AArch64 and x64 ABI commonalities, because
@@ -106,9 +106,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         flags: &settings::Flags,
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
-        add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
-    ) -> CodegenResult<(u32, Option<usize>)> {
+    ) -> CodegenResult<u32> {
         let is_apple_cc = call_conv == isa::CallConv::AppleAarch64;
         let is_winch_return = call_conv == isa::CallConv::Winch && args_or_rets == ArgsOrRets::Rets;
 
@@ -150,33 +149,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         // 8 vector registers at once.
         let max_per_class_reg_vals = 8; // x0-x7 and v0-v7
         let mut remaining_reg_vals = 16;
-
-        let ret_area_ptr = if add_ret_area_ptr {
-            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
-            if call_conv != isa::CallConv::Winch {
-                // In the AAPCS64 calling convention the return area pointer is
-                // stored in x8.
-                Some(ABIArg::reg(
-                    xreg(8).to_real_reg().unwrap(),
-                    I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ))
-            } else {
-                // Use x0 for the return area pointer in the Winch calling convention
-                // to simplify the ABI handling code in Winch by avoiding an AArch64
-                // special case to assign it to x8.
-                next_xreg += 1;
-                Some(ABIArg::reg(
-                    xreg(0).to_real_reg().unwrap(),
-                    I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ))
-            }
-        } else {
-            None
-        };
 
         for (i, param) in params.into_iter().enumerate() {
             if is_apple_cc && param.value_type == types::F128 && !flags.enable_llvm_abi_extensions()
@@ -297,7 +269,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 };
 
                 let push_to_reg = if is_winch_return {
-                    // Winch uses the first registry to return the last result
+                    // Winch uses the first register to return the last result
                     i == params.len() - 1
                 } else {
                     // Use max_per_class_reg_vals & remaining_reg_vals otherwise
@@ -330,10 +302,16 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
             // Spill to the stack
 
+            if args_or_rets == ArgsOrRets::Rets {
+                return Err(crate::CodegenError::Unsupported(
+                    "too many return values".to_owned(),
+                ));
+            }
+
             // Compute the stack slot's size.
             let size = (ty_bits(param.value_type) / 8) as u32;
 
-            let size = if is_apple_cc || is_winch_return {
+            let size = if is_apple_cc {
                 // MacOS and Winch aarch64 allows stack slots with
                 // sizes less than 8 bytes. They still need to be
                 // properly aligned on their natural data alignment,
@@ -345,11 +323,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 std::cmp::max(size, 8)
             };
 
-            if !is_winch_return {
-                // Align the stack slot.
-                debug_assert!(size.is_power_of_two());
-                next_stack = align_to(next_stack, size);
-            }
+            // Align the stack slot.
+            debug_assert!(size.is_power_of_two());
+            next_stack = align_to(next_stack, size);
 
             let slots = reg_types
                 .iter()
@@ -376,20 +352,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             next_stack += size;
         }
 
-        let extra_arg = if let Some(ret_area_ptr) = ret_area_ptr {
-            args.push_non_formal(ret_area_ptr);
-            Some(args.args().len() - 1)
-        } else {
-            None
-        };
-
-        if is_winch_return {
-            winch::reverse_stack(args, next_stack, false);
-        }
-
         next_stack = align_to(next_stack, 16);
 
-        Ok((next_stack, extra_arg))
+        Ok(next_stack)
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {
@@ -1266,7 +1231,6 @@ impl AArch64CallSite {
         // Put all arguments in registers and stack slots (within that newly
         // allocated stack space).
         self.emit_args(ctx, args);
-        self.emit_stack_ret_arg_for_tail_call(ctx);
 
         let dest = self.dest().clone();
         let uses = self.take_uses();

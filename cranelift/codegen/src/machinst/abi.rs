@@ -381,17 +381,14 @@ pub trait ABIMachineSpec {
     /// should come at the end of the list so that the first N lowered
     /// parameters align with the N clif parameters.
     ///
-    /// Returns the stack-space used (rounded up to as alignment requires), and
-    /// if `add_ret_area_ptr` was passed, the index of the extra synthetic arg
-    /// that was added.
+    /// Returns the stack-space used (rounded up to as alignment requires).
     fn compute_arg_locs(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
-        add_ret_area_ptr: bool,
         args: ArgsAccumulator,
-    ) -> CodegenResult<(u32, Option<usize>)>;
+    ) -> CodegenResult<u32>;
 
     /// Generate a load from the stack.
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I;
@@ -676,13 +673,6 @@ pub struct SigData {
     /// reduce the size of the struct.
     sized_stack_arg_space: u32,
 
-    /// Space on stack used to store return values. We're storing the size in u32 to
-    /// reduce the size of the struct.
-    sized_stack_ret_space: u32,
-
-    /// Index in `args` of the stack-return-value-area argument.
-    stack_ret_arg: Option<u16>,
-
     /// Calling convention used.
     call_conv: isa::CallConv,
 }
@@ -693,19 +683,9 @@ impl SigData {
         self.sized_stack_arg_space.into()
     }
 
-    /// Get total stack space required for return values.
-    pub fn sized_stack_ret_space(&self) -> i64 {
-        self.sized_stack_ret_space.into()
-    }
-
     /// Get calling convention used.
     pub fn call_conv(&self) -> isa::CallConv {
         self.call_conv
-    }
-
-    /// The index of the stack-return-value-area argument, if any.
-    pub fn stack_ret_arg(&self) -> Option<u16> {
-        self.stack_ret_arg
     }
 }
 
@@ -854,32 +834,21 @@ impl SigSet {
         // NOTE: We rely on the order of the args (rets -> args) inserted to compute the offsets in
         // `SigSet::args()` and `SigSet::rets()`. Therefore, we cannot change the two
         // compute_arg_locs order.
-        let (sized_stack_ret_space, _) = M::compute_arg_locs(
+        let sized_stack_ret_space = M::compute_arg_locs(
             sig.call_conv,
             flags,
             &returns,
             ArgsOrRets::Rets,
-            /* extra ret-area ptr = */ false,
             ArgsAccumulator::new(&mut self.abi_args),
         )?;
+        assert_eq!(sized_stack_ret_space, 0);
         let rets_end = u32::try_from(self.abi_args.len()).unwrap();
 
-        // To avoid overflow issues, limit the return size to something reasonable.
-        if sized_stack_ret_space > M::STACK_ARG_RET_SIZE_LIMIT {
-            return Err(CodegenError::ImplLimitExceeded);
-        }
-
-        let need_stack_return_area = sized_stack_ret_space > 0;
-        if need_stack_return_area {
-            assert!(!sig.uses_special_param(ir::ArgumentPurpose::StructReturn));
-        }
-
-        let (sized_stack_arg_space, stack_ret_arg) = M::compute_arg_locs(
+        let sized_stack_arg_space = M::compute_arg_locs(
             sig.call_conv,
             flags,
             &sig.params,
             ArgsOrRets::Args,
-            need_stack_return_area,
             ArgsAccumulator::new(&mut self.abi_args),
         )?;
         let args_end = u32::try_from(self.abi_args.len()).unwrap();
@@ -891,22 +860,17 @@ impl SigSet {
 
         trace!(
             "ABISig: sig {:?} => args end = {} rets end = {}
-             arg stack = {} ret stack = {} stack_ret_arg = {:?}",
+             arg stack = {}",
             sig,
             args_end,
             rets_end,
             sized_stack_arg_space,
-            sized_stack_ret_space,
-            need_stack_return_area,
         );
 
-        let stack_ret_arg = stack_ret_arg.map(|s| u16::try_from(s).unwrap());
         Ok(SigData {
             args_end,
             rets_end,
             sized_stack_arg_space,
-            sized_stack_ret_space,
-            stack_ret_arg,
             call_conv: sig.call_conv,
         })
     }
@@ -918,17 +882,6 @@ impl SigSet {
         let start = usize::try_from(sig_data.rets_end).unwrap();
         let end = usize::try_from(sig_data.args_end).unwrap();
         &self.abi_args[start..end]
-    }
-
-    /// Get information specifying how to pass the implicit pointer
-    /// to the return-value area on the stack, if required.
-    pub fn get_ret_arg(&self, sig: Sig) -> Option<ABIArg> {
-        let sig_data = &self.sigs[sig];
-        if let Some(i) = sig_data.stack_ret_arg {
-            Some(self.args(sig)[usize::from(i)].clone())
-        } else {
-            None
-        }
     }
 
     /// Get information specifying how to pass one argument.
@@ -952,12 +905,7 @@ impl SigSet {
 
     /// Get the number of arguments expected.
     pub fn num_args(&self, sig: Sig) -> usize {
-        let len = self.args(sig).len();
-        if self.sigs[sig].stack_ret_arg.is_some() {
-            len - 1
-        } else {
-            len
-        }
+        self.args(sig).len()
     }
 
     /// Get the number of return values expected.
@@ -1403,21 +1351,6 @@ impl<M: ABIMachineSpec> Callee<M> {
         &self.ir_sig
     }
 
-    /// Initialize. This is called after the Callee is constructed because it
-    /// may allocate a temp vreg, which can only be allocated once the lowering
-    /// context exists.
-    pub fn init_retval_area(
-        &mut self,
-        sigs: &SigSet,
-        vregs: &mut VRegAllocator<M::I>,
-    ) -> CodegenResult<()> {
-        if sigs[self.sig].stack_ret_arg.is_some() {
-            let ret_area_ptr = vregs.alloc(M::word_type())?;
-            self.ret_area_ptr = Some(ret_area_ptr.only_reg().unwrap());
-        }
-        Ok(())
-    }
-
     /// Get the return area pointer register, if any.
     pub fn ret_area_ptr(&self) -> Option<Reg> {
         self.ret_area_ptr
@@ -1662,34 +1595,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             }
         }
         (reg_pairs, ret)
-    }
-
-    /// Generate any setup instruction needed to save values to the
-    /// return-value area. This is usually used when were are multiple return
-    /// values or an otherwise large return value that must be passed on the
-    /// stack; typically the ABI specifies an extra hidden argument that is a
-    /// pointer to that memory.
-    pub fn gen_retval_area_setup(
-        &mut self,
-        sigs: &SigSet,
-        vregs: &mut VRegAllocator<M::I>,
-    ) -> Option<M::I> {
-        if let Some(i) = sigs[self.sig].stack_ret_arg {
-            let ret_area_ptr = Writable::from_reg(self.ret_area_ptr.unwrap());
-            let insts =
-                self.gen_copy_arg_to_regs(sigs, i.into(), ValueRegs::one(ret_area_ptr), vregs);
-            insts.into_iter().next().map(|inst| {
-                trace!(
-                    "gen_retval_area_setup: inst {:?}; ptr reg is {:?}",
-                    inst,
-                    ret_area_ptr.to_reg()
-                );
-                inst
-            })
-        } else {
-            trace!("gen_retval_area_setup: not needed");
-            None
-        }
     }
 
     /// Generate a return instruction.
@@ -2281,18 +2186,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
         }
     }
 
-    /// Emit the code to forward a stack-return pointer argument through a tail
-    /// call.
-    pub fn emit_stack_ret_arg_for_tail_call(&mut self, ctx: &mut Lower<M::I>) {
-        if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg() {
-            let ret_area_ptr = ctx.abi().ret_area_ptr.expect(
-                "if the tail callee has a return pointer, then the tail caller \
-                 must as well",
-            );
-            self.gen_arg(ctx, i.into(), ValueRegs::one(ret_area_ptr));
-        }
-    }
-
     /// Define a return value after the call returns.
     pub fn gen_retval(
         &mut self,
@@ -2364,15 +2257,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
     /// parts of the `CallSite` object in emitting instructions.
     pub fn emit_call(&mut self, ctx: &mut Lower<M::I>) {
         let word_type = M::word_type();
-        if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg {
-            let rd = ctx.alloc_tmp(word_type).only_reg().unwrap();
-            let ret_area_base = ctx.sigs()[self.sig].sized_stack_arg_space();
-            ctx.emit(M::gen_get_stack_addr(
-                StackAMode::OutgoingArg(ret_area_base),
-                rd,
-            ));
-            self.gen_arg(ctx, i.into(), ValueRegs::one(rd.to_reg()));
-        }
 
         let uses = mem::take(&mut self.uses);
         let defs = mem::take(&mut self.defs);
@@ -2398,11 +2282,9 @@ impl<M: ABIMachineSpec> CallSite<M> {
         };
 
         let call_conv = sig.call_conv;
-        let ret_space = sig.sized_stack_ret_space;
         let arg_space = sig.sized_stack_arg_space;
 
-        ctx.abi_mut()
-            .accumulate_outgoing_args_size(ret_space + arg_space);
+        ctx.abi_mut().accumulate_outgoing_args_size(arg_space);
 
         let tmp = ctx.alloc_tmp(word_type).only_reg().unwrap();
 

@@ -20,6 +20,7 @@ use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 
 use smallvec::{smallvec, SmallVec};
+use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 /// Support for the Riscv64 ABI from the callee side (within a function body).
@@ -91,9 +92,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         _flags: &settings::Flags,
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
-        add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
-    ) -> CodegenResult<(u32, Option<usize>)> {
+    ) -> CodegenResult<u32> {
         assert_ne!(
             call_conv,
             isa::CallConv::Winch,
@@ -110,19 +110,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut next_f_reg = f_start;
         // Stack space.
         let mut next_stack: u32 = 0;
-
-        let ret_area_ptr = if add_ret_area_ptr {
-            assert!(ArgsOrRets::Args == args_or_rets);
-            next_x_reg += 1;
-            Some(ABIArg::reg(
-                x_reg(x_start).to_real_reg().unwrap(),
-                I64,
-                ir::ArgumentExtension::None,
-                ir::ArgumentPurpose::Normal,
-            ))
-        } else {
-            None
-        };
 
         for param in params {
             if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
@@ -154,6 +141,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                         extension: param.extension,
                     });
                 } else {
+                    if args_or_rets == ArgsOrRets::Rets {
+                        return Err(crate::CodegenError::Unsupported(
+                            "too many return values".to_owned(),
+                        ));
+                    }
+
                     // Compute size and 16-byte stack alignment happens
                     // separately after all args.
                     let size = reg_ty.bits() / 8;
@@ -174,16 +167,10 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 purpose: param.purpose,
             });
         }
-        let pos = if let Some(ret_area_ptr) = ret_area_ptr {
-            args.push_non_formal(ret_area_ptr);
-            Some(args.args().len() - 1)
-        } else {
-            None
-        };
 
         next_stack = align_to(next_stack, Self::stack_align(call_conv));
 
-        Ok((next_stack, pos))
+        Ok(next_stack)
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {
@@ -721,7 +708,6 @@ impl Riscv64ABICallSite {
         // Put all arguments in registers and stack slots (within that newly
         // allocated stack space).
         self.emit_args(ctx, args);
-        self.emit_stack_ret_arg_for_tail_call(ctx);
 
         let dest = self.dest().clone();
         let uses = self.take_uses();
