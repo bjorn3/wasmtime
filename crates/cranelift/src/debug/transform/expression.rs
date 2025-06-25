@@ -4,7 +4,7 @@ use crate::debug::ModuleMemoryOffset;
 use crate::debug::transform::debug_transform_logging::{
     dbi_log_enabled, log_get_value_loc, log_get_value_name, log_get_value_ranges,
 };
-use crate::translate::get_vmctx_value_label;
+use crate::translate::{get_local_value_label, get_vmctx_value_label};
 use anyhow::{Context, Error, Result};
 use core::fmt;
 use cranelift_codegen::LabelValueLoc;
@@ -611,7 +611,7 @@ where
             }
             Operation::WasmLocal { index } => {
                 flush_code_chunk!();
-                let label = ValueLabel::from_u32(index);
+                let label = get_local_value_label(index);
                 push!(CompiledExpressionPart::Local {
                     label,
                     trailing: false,
@@ -760,7 +760,7 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
         dbi_log!("Intersecting with {:?}", log_get_value_name(label));
         self.processed_labels.insert(label);
 
-        let value_ranges = match self.frame_info.and_then(|fi| fi.value_ranges.get(&label)) {
+        let value_ranges = match self.frame_info.and_then(|fi| fi.value_ranges.get(label)) {
             Some(value_ranges) => value_ranges,
             None => {
                 return;
@@ -896,6 +896,7 @@ mod tests {
     };
     use crate::CompiledFunctionMetadata;
     use cranelift_codegen::{isa::lookup, settings::Flags};
+    use cranelift_entity::SecondaryMap;
     use gimli::{Encoding, EndianSlice, Expression, RunTimeEndian, constants};
     use target_lexicon::triple;
     use wasmtime_environ::FilePos;
@@ -1274,42 +1275,32 @@ mod tests {
     fn create_mock_value_ranges() -> (ValueLabelsRanges, (ValueLabel, ValueLabel, ValueLabel)) {
         use cranelift_codegen::{LabelValueLoc, ValueLocRange};
         use cranelift_entity::EntityRef;
-        use std::collections::HashMap;
-        let mut value_ranges = HashMap::new();
+        let mut value_ranges = SecondaryMap::new();
         let value_0 = ValueLabel::new(0);
         let value_1 = ValueLabel::new(1);
         let value_2 = ValueLabel::new(2);
-        value_ranges.insert(
-            value_0,
-            vec![ValueLocRange {
+        value_ranges[value_0] = vec![ValueLocRange {
+            loc: LabelValueLoc::CFAOffset(0),
+            start: 0,
+            end: 25,
+        }];
+        value_ranges[value_1] = vec![ValueLocRange {
+            loc: LabelValueLoc::CFAOffset(0),
+            start: 5,
+            end: 30,
+        }];
+        value_ranges[value_2] = vec![
+            ValueLocRange {
                 loc: LabelValueLoc::CFAOffset(0),
                 start: 0,
-                end: 25,
-            }],
-        );
-        value_ranges.insert(
-            value_1,
-            vec![ValueLocRange {
+                end: 10,
+            },
+            ValueLocRange {
                 loc: LabelValueLoc::CFAOffset(0),
-                start: 5,
+                start: 20,
                 end: 30,
-            }],
-        );
-        value_ranges.insert(
-            value_2,
-            vec![
-                ValueLocRange {
-                    loc: LabelValueLoc::CFAOffset(0),
-                    start: 0,
-                    end: 10,
-                },
-                ValueLocRange {
-                    loc: LabelValueLoc::CFAOffset(0),
-                    start: 20,
-                    end: 30,
-                },
-            ],
-        );
+            },
+        ];
         (value_ranges, (value_0, value_1, value_2))
     }
 

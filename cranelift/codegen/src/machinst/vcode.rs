@@ -34,7 +34,7 @@ use rustc_hash::FxHashMap;
 use core::cmp::Ordering;
 use core::fmt::{self, Write};
 use core::mem::take;
-use cranelift_entity::{Keys, entity_impl};
+use cranelift_entity::{Keys, SecondaryMap, entity_impl};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
@@ -1167,10 +1167,10 @@ impl<I: VCodeInst> VCode<I> {
             self.log_value_labels_ranges(regalloc, inst_offsets);
         }
 
-        let mut value_labels_ranges: ValueLabelsRanges = HashMap::new();
+        let mut value_labels_ranges: ValueLabelsRanges = SecondaryMap::new();
         for &(label, from, to, alloc) in &regalloc.debug_locations {
             let label = ValueLabel::from_u32(label);
-            let ranges = value_labels_ranges.entry(label).or_insert_with(|| vec![]);
+            let ranges = &mut value_labels_ranges[label];
             let prog_point_to_inst = |prog_point: ProgPoint| {
                 let mut inst = prog_point.inst();
                 if prog_point.pos() == InstPosition::After {

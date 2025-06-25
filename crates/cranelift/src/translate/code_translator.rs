@@ -78,12 +78,11 @@ use crate::translate::environ::{GlobalVariable, StructFieldsVec};
 use crate::translate::state::{ControlStackFrame, ElseData, FuncTranslationState};
 use crate::translate::translation_utils::{
     block_with_params, blocktype_params_results, f32_translation, f64_translation,
+    get_local_value_label,
 };
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
-use cranelift_codegen::ir::{
-    self, AtomicRmwOp, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
-};
+use cranelift_codegen::ir::{self, AtomicRmwOp, InstBuilder, JumpTableData, MemFlags, Value};
 use cranelift_codegen::ir::{BlockArg, types::*};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
@@ -147,7 +146,7 @@ pub fn translate_operator(
         Operator::LocalGet { local_index } => {
             let val = builder.use_var(Variable::from_u32(*local_index));
             state.push1(val);
-            let label = ValueLabel::from_u32(*local_index);
+            let label = get_local_value_label(*local_index);
             builder.set_val_label(val, label);
         }
         Operator::LocalSet { local_index } => {
@@ -160,7 +159,7 @@ pub fn translate_operator(
             }
 
             builder.def_var(Variable::from_u32(*local_index), val);
-            let label = ValueLabel::from_u32(*local_index);
+            let label = get_local_value_label(*local_index);
             builder.set_val_label(val, label);
         }
         Operator::LocalTee { local_index } => {
@@ -173,7 +172,7 @@ pub fn translate_operator(
             }
 
             builder.def_var(Variable::from_u32(*local_index), val);
-            let label = ValueLabel::from_u32(*local_index);
+            let label = get_local_value_label(*local_index);
             builder.set_val_label(val, label);
         }
         /********************************** Globals ****************************************

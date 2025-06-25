@@ -2,7 +2,7 @@ use super::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
 use super::utils::append_vmctx_info;
 use crate::debug::Compilation;
-use crate::translate::get_vmctx_value_label;
+use crate::translate::{get_local_for_value_label, get_vmctx_value_label};
 use anyhow::{Context, Error};
 use cranelift_codegen::isa::TargetIsa;
 use gimli::LineEncoding;
@@ -210,7 +210,7 @@ fn generate_vars(
     vars.sort_by(|a, b| a.index().cmp(&b.index()));
 
     for label in vars {
-        if label.index() == vmctx_label.index() {
+        if label == vmctx_label {
             append_vmctx_info(
                 unit,
                 die_id,
@@ -222,7 +222,7 @@ fn generate_vars(
                 isa,
             )?;
         } else {
-            let var_index = label.index();
+            let var_index = get_local_for_value_label(label);
             let (type_die_id, is_param) =
                 if let Some(result) = resolve_var_type(var_index, wasm_types, func_meta) {
                     result
@@ -232,7 +232,7 @@ fn generate_vars(
                 };
 
             let loc_list_id = {
-                let locs = CompiledExpression::from_label(*label)
+                let locs = CompiledExpression::from_label(label)
                     .build_with_locals(scope_ranges, addr_tr, Some(frame_info), isa)
                     .expressions
                     .map(|i| {

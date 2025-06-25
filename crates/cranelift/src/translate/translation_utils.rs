@@ -2,6 +2,7 @@
 use crate::translate::environ::TargetEnvironment;
 use core::u32;
 use cranelift_codegen::ir;
+use cranelift_entity::EntityRef;
 use cranelift_frontend::FunctionBuilder;
 use wasmparser::{FuncValidator, WasmModuleResources};
 use wasmtime_environ::WasmResult;
@@ -88,8 +89,15 @@ pub fn f64_translation(x: wasmparser::Ieee64) -> ir::immediates::Ieee64 {
     ir::immediates::Ieee64::with_bits(x.bits())
 }
 
-/// Special VMContext value label. It is tracked as 0xffff_fffe label.
+/// Special VMContext value label. It is tracked as 0 label.
 pub fn get_vmctx_value_label() -> ir::ValueLabel {
-    const VMCTX_LABEL: u32 = 0xffff_fffe;
-    ir::ValueLabel::from_u32(VMCTX_LABEL)
+    ir::ValueLabel::from_u32(0)
+}
+
+pub fn get_local_value_label(local: u32) -> ir::ValueLabel {
+    ir::ValueLabel::from_u32(local + 1)
+}
+
+pub fn get_local_for_value_label(label: ir::ValueLabel) -> usize {
+    label.index() - 1
 }

@@ -1,8 +1,8 @@
-use crate::HashMap;
 use crate::ir::ValueLabel;
 use crate::machinst::Reg;
 use alloc::vec::Vec;
 
+use cranelift_entity::SecondaryMap;
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 
@@ -29,4 +29,4 @@ pub enum LabelValueLoc {
 }
 
 /// Resulting map of Value labels and their ranges/locations.
-pub type ValueLabelsRanges = HashMap<ValueLabel, Vec<ValueLocRange>>;
+pub type ValueLabelsRanges = SecondaryMap<ValueLabel, Vec<ValueLocRange>>;

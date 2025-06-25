@@ -338,15 +338,15 @@ impl<'a> fmt::Debug for ValueRangesSummary<'a> {
         if let Some(ranges) = self.ranges {
             // Sort the output first for nicer display.
             let mut locals = Vec::new();
-            for value in ranges {
-                locals.push(*value.0);
+            for value in ranges.keys() {
+                locals.push(value);
             }
             locals.sort_by_key(|n| n.as_u32());
 
             for i in 0..locals.len() {
                 let name = locals[i];
                 write!(f, "{:<6?}:", log_get_value_name(name))?;
-                for range in ranges.get(&name).unwrap() {
+                for range in ranges.get(name).unwrap() {
                     write!(f, " {:?}", log_get_value_loc(range.loc, self.isa))?;
                     write!(f, "@[{}..{})", range.start, range.end)?;
                 }
