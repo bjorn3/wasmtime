@@ -594,6 +594,7 @@ struct InstNode {
     block: PackedOption<Block>,
     prev: PackedOption<Inst>,
     next: PackedOption<Inst>,
+    // FIXME maybe make these unique within a single block only?
     seq: SequenceNumber,
 }
 

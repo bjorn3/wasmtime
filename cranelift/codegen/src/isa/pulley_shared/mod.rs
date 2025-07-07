@@ -195,7 +195,7 @@ where
             frame_size,
             vcode: emit_result.disasm,
             value_labels_ranges,
-            sized_stackslot_offsets,
+            //sized_stackslot_offsets,
             dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,

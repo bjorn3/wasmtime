@@ -221,6 +221,7 @@ pub struct EmitResult {
     /// epilogue(s), and makes use of the regalloc results.
     pub disasm: Option<String>,
 
+    // FIXME only fill these in when debuginfo requested
     /// Offsets of sized stackslots.
     pub sized_stackslot_offsets: PrimaryMap<StackSlot, u32>,
 

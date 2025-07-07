@@ -360,6 +360,7 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     /// relocations are tracked here; references to labels within the buffer are
     /// resolved before emission.
     pub(crate) relocs: SmallVec<[FinalizedMachReloc; 16]>,
+    // FIXME avoid storing trap records when not requested
     /// Any trap records referring to this code.
     pub(crate) traps: SmallVec<[MachTrap; 16]>,
     /// Any call site records referring to this code.
@@ -1604,6 +1605,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add a trap record at the current offset.
     pub fn add_trap(&mut self, code: TrapCode) {
+        return;
         self.traps.push(MachTrap {
             offset: self.data.len() as CodeOffset,
             code,

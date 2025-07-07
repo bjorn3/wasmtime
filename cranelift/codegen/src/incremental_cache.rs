@@ -140,10 +140,12 @@ struct CacheKey<'a> {
 impl<'a> Hash for CacheKey<'a> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.stencil.hash(state);
+        /*
         self.isa.name().hash(state);
         self.isa.triple().hash(state);
         self.isa.flags().hash(state);
         self.isa.isa_flags_hash_key().hash(state);
+        */
     }
 }
 
