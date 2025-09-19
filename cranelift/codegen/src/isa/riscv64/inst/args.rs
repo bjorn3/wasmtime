@@ -173,22 +173,22 @@ impl AMode {
 impl Display for AMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            &AMode::RegOffset(r, offset, ..) => {
+            &AMode::RegOffset(r, offset) => {
                 write!(f, "{}({})", offset, reg_name(r))
             }
-            &AMode::SPOffset(offset, ..) => {
+            &AMode::SPOffset(offset) => {
                 write!(f, "{offset}(sp)")
             }
-            &AMode::SlotOffset(offset, ..) => {
+            &AMode::SlotOffset(offset) => {
                 write!(f, "{offset}(slot)")
             }
             &AMode::IncomingArg(offset) => {
                 write!(f, "-{offset}(incoming_arg)")
             }
-            &AMode::FPOffset(offset, ..) => {
+            &AMode::FPOffset(offset) => {
                 write!(f, "{offset}(fp)")
             }
-            &AMode::Const(addr, ..) => {
+            &AMode::Const(addr) => {
                 write!(f, "[const({})]", addr.as_u32())
             }
             &AMode::Label(label) => {
