@@ -1637,24 +1637,6 @@ impl<'a> Parser<'a> {
                     flags,
                 }
             }
-            "iadd_imm" => {
-                self.match_token(
-                    Token::Dot,
-                    "expected '.' followed by type in iadd_imm global value decl",
-                )?;
-                let global_type = self.match_type("expected iadd type")?;
-                let base = self.match_gv("expected global value: gv«n»")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' followed by rhs in iadd_imm global value decl",
-                )?;
-                let offset = self.match_imm64("expected iadd_imm immediate")?;
-                GlobalValueData::IAddImm {
-                    base,
-                    offset,
-                    global_type,
-                }
-            }
             "symbol" => {
                 let colocated = self.optional(Token::Identifier("colocated"));
                 let tls = self.optional(Token::Identifier("tls"));

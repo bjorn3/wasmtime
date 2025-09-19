@@ -5,7 +5,7 @@
 
 use super::WalkCommand;
 use crate::cursor::{Cursor, FuncCursor};
-use crate::ir::{self, InstBuilder, pcc::Fact};
+use crate::ir::{self, InstBuilder};
 use crate::isa::TargetIsa;
 
 /// Expand a `global_value` instruction according to the definition of the global value.
@@ -23,11 +23,6 @@ pub fn expand_global_value(
 
     match func.global_values[global_value] {
         ir::GlobalValueData::VMContext => vmctx_addr(global_value, inst, func),
-        ir::GlobalValueData::IAddImm {
-            base,
-            offset,
-            global_type,
-        } => iadd_imm_addr(inst, func, base, offset.into(), global_type),
         ir::GlobalValueData::Load {
             base,
             offset,
@@ -89,38 +84,6 @@ fn vmctx_addr(
     // return `WalkCommand::Continue`; instead "revisit" the current
     // instruction, which will be the next instruction since we removed the
     // current instruction.
-    WalkCommand::Revisit
-}
-
-/// Expand a `global_value` instruction for an iadd_imm global.
-fn iadd_imm_addr(
-    inst: ir::Inst,
-    func: &mut ir::Function,
-    base: ir::GlobalValue,
-    offset: i64,
-    global_type: ir::Type,
-) -> WalkCommand {
-    let mut pos = FuncCursor::new(func).at_inst(inst);
-
-    // Get the value for the lhs.
-    let lhs = pos.ins().global_value(global_type, base);
-    if let Some(fact) = &pos.func.global_value_facts[base] {
-        pos.func.dfg.facts[lhs] = Some(fact.clone());
-    }
-
-    // Generate the constant and attach a fact to the constant if
-    // there is a fact on the base.
-    let constant = pos.ins().iconst(global_type, offset);
-    if pos.func.global_value_facts[base].is_some() {
-        let bits = u16::try_from(global_type.bits()).unwrap();
-        let unsigned_offset = offset as u64; // Safety: reinterpret i64 bits as u64.
-        pos.func.dfg.facts[constant] = Some(Fact::constant(bits, unsigned_offset));
-    }
-
-    // Simply replace the `global_value` instruction with an `iadd_imm`, reusing the result value.
-    pos.func.dfg.replace(inst).iadd(lhs, constant);
-
-    // Need to legalize the `global_value` that we emitted.
     WalkCommand::Revisit
 }
 

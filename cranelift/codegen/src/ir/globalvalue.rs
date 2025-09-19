@@ -35,18 +35,6 @@ pub enum GlobalValueData {
         flags: MemFlags,
     },
 
-    /// Value is an offset from another global value.
-    IAddImm {
-        /// The base pointer global value.
-        base: GlobalValue,
-
-        /// Byte offset to be added to the value.
-        offset: Imm64,
-
-        /// Type of the iadd.
-        global_type: Type,
-    },
-
     /// Value is symbolic, meaning it's a name which will be resolved to an
     /// actual value later (eg. by linking). Cranelift itself does not interpret
     /// this name; it's used by embedders to link with other data structures.
@@ -96,7 +84,7 @@ impl GlobalValueData {
     pub fn global_type(&self, isa: &dyn TargetIsa) -> Type {
         match *self {
             Self::VMContext { .. } | Self::Symbol { .. } => isa.pointer_type(),
-            Self::IAddImm { global_type, .. } | Self::Load { global_type, .. } => global_type,
+            Self::Load { global_type, .. } => global_type,
             Self::DynScaleTargetConst { .. } => isa.pointer_type(),
         }
     }
@@ -112,11 +100,6 @@ impl fmt::Display for GlobalValueData {
                 global_type,
                 flags,
             } => write!(f, "load.{global_type}{flags} {base}{offset}"),
-            Self::IAddImm {
-                global_type,
-                base,
-                offset,
-            } => write!(f, "iadd_imm.{global_type} {base}, {offset}"),
             Self::Symbol {
                 ref name,
                 offset,

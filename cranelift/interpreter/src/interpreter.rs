@@ -8,7 +8,7 @@ use crate::frame::Frame;
 use crate::instruction::DfgInstructionContext;
 use crate::state::{InterpreterFunctionRef, MemoryError, State};
 use crate::step::{ControlFlow, CraneliftTrap, StepError, step};
-use crate::value::{DataValueExt, ValueError};
+use crate::value::ValueError;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
     ArgumentPurpose, Block, Endianness, ExternalName, FuncRef, Function, GlobalValue,
@@ -462,8 +462,6 @@ impl<'a> State<'a> for InterpreterState<'a> {
         #[derive(Debug)]
         enum ResolveAction {
             Resolve(GlobalValue),
-            /// Perform an add on the current address
-            Add(DataValue),
             /// Load From the current address and replace it with the loaded value
             Load {
                 /// Offset added to the base pointer before doing the load.
@@ -513,25 +511,9 @@ impl<'a> State<'a> for InterpreterState<'a> {
                         });
                         action_stack.push(ResolveAction::Resolve(base));
                     }
-                    GlobalValueData::IAddImm {
-                        base,
-                        offset,
-                        global_type,
-                    } => {
-                        let offset: i64 = offset.into();
-                        let dv = DataValue::int(offset as i128, global_type)
-                            .map_err(|_| MemoryError::InvalidAddressType(global_type))?;
-                        action_stack.push(ResolveAction::Add(dv));
-                        action_stack.push(ResolveAction::Resolve(base));
-                    }
                     GlobalValueData::Symbol { .. } => unimplemented!(),
                     GlobalValueData::DynScaleTargetConst { .. } => unimplemented!(),
                 },
-                Some(ResolveAction::Add(dv)) => {
-                    current_val = current_val
-                        .add(dv.clone())
-                        .map_err(|_| MemoryError::InvalidAddress(dv))?;
-                }
                 Some(ResolveAction::Load {
                     offset,
                     global_type,

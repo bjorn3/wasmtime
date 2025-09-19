@@ -630,7 +630,6 @@ impl Mutator for RemoveUnusedEntities {
                         // the global value removal for now.
                         // FIXME Handle them in a better way.
                         GlobalValueData::Load { .. }
-                        | GlobalValueData::IAddImm { .. }
                         | GlobalValueData::DynScaleTargetConst { .. } => return None,
                     }
                 }

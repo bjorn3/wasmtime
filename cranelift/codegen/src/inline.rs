@@ -1381,15 +1381,6 @@ fn create_global_values(func: &mut ir::Function, callee: &ir::Function) -> u32 {
                 global_type: *global_type,
                 flags: *flags,
             },
-            ir::GlobalValueData::IAddImm {
-                base,
-                offset,
-                global_type,
-            } => ir::GlobalValueData::IAddImm {
-                base: ir::GlobalValue::from_u32(base.as_u32() + gv_offset),
-                offset: *offset,
-                global_type: *global_type,
-            },
 
             // These kinds of global values do not reference other global
             // values, so we can just clone them.

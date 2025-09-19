@@ -338,8 +338,7 @@ impl<'a> Verifier<'a> {
             let mut cur = gv;
             loop {
                 match self.func.global_values[cur] {
-                    ir::GlobalValueData::Load { base, .. }
-                    | ir::GlobalValueData::IAddImm { base, .. } => {
+                    ir::GlobalValueData::Load { base, .. } => {
                         if seen.insert(base).is_some() {
                             if !cycle_seen {
                                 errors.report((
@@ -366,26 +365,6 @@ impl<'a> Verifier<'a> {
                         .is_none()
                     {
                         errors.report((gv, format!("undeclared vmctx reference {gv}")));
-                    }
-                }
-                ir::GlobalValueData::IAddImm {
-                    base, global_type, ..
-                } => {
-                    if !global_type.is_int() {
-                        errors.report((
-                            gv,
-                            format!("iadd_imm global value with non-int type {global_type}"),
-                        ));
-                    } else if let Some(isa) = self.isa {
-                        let base_type = self.func.global_values[base].global_type(isa);
-                        if global_type != base_type {
-                            errors.report((
-                                gv,
-                                format!(
-                                    "iadd_imm type {global_type} differs from operand type {base_type}"
-                                ),
-                            ));
-                        }
                     }
                 }
                 ir::GlobalValueData::Load { base, .. } => {
