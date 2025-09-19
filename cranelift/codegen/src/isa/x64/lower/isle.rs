@@ -632,8 +632,22 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
+    fn amode_stack(
+        &mut self,
+        stack_slot: StackSlot,
+        offset1: Offset32,
+        offset2: Offset32,
+    ) -> SyntheticAmode {
+        let offset =
+            u32::try_from(i32::from(offset1).checked_add(i32::from(offset2)).unwrap()).unwrap();
+        self.lower_ctx
+            .abi()
+            .sized_stackslot_addr(stack_slot, offset)
+            .into()
+    }
+
     #[inline]
-    fn amode_offset(&mut self, addr: &Amode, offset: i32) -> Amode {
+    fn amode_offset(&mut self, addr: &SyntheticAmode, offset: i32) -> SyntheticAmode {
         addr.offset(offset)
     }
 

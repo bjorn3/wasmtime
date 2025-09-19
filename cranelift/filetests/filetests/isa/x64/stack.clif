@@ -79,8 +79,7 @@ block0:
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
-;   leaq <offset:1>+(%rsp), %rdi
-;   movq (%rdi), %rax
+;   movq <offset:1>+(%rsp), %rax
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -92,8 +91,7 @@ block0:
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block1: ; offset 0x8
-;   leaq (%rsp), %rdi
-;   movq (%rdi), %rax
+;   movq (%rsp), %rax
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -113,8 +111,7 @@ block0:
 ;   movq %rsp, %rbp
 ;   subq $0x186b0, %rsp
 ; block0:
-;   leaq <offset:1>+(%rsp), %rdi
-;   movq (%rdi), %rax
+;   movq <offset:1>+(%rsp), %rax
 ;   addq $0x186b0, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -126,8 +123,7 @@ block0:
 ;   movq %rsp, %rbp
 ;   subq $0x186b0, %rsp
 ; block1: ; offset 0xb
-;   leaq (%rsp), %rdi
-;   movq (%rdi), %rax
+;   movq (%rsp), %rax
 ;   addq $0x186b0, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -146,8 +142,7 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
-;   leaq <offset:1>+(%rsp), %rax
-;   movq %rdi, (%rax)
+;   movq %rdi, <offset:1>+(%rsp)
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -159,8 +154,7 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block1: ; offset 0x8
-;   leaq (%rsp), %rax
-;   movq %rdi, (%rax)
+;   movq %rdi, (%rsp)
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -180,8 +174,7 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ;   subq $0x186b0, %rsp
 ; block0:
-;   leaq <offset:1>+(%rsp), %rax
-;   movq %rdi, (%rax)
+;   movq %rdi, <offset:1>+(%rsp)
 ;   addq $0x186b0, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -193,8 +186,7 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ;   subq $0x186b0, %rsp
 ; block1: ; offset 0xb
-;   leaq (%rsp), %rax
-;   movq %rdi, (%rax)
+;   movq %rdi, (%rsp)
 ;   addq $0x186b0, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -763,9 +755,8 @@ block0(v0: i128):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
-;   leaq <offset:1>+(%rsp), %rcx
-;   movq %rdi, (%rcx)
-;   movq %rsi, 8(%rcx)
+;   movq %rdi, <offset:1>+(%rsp)
+;   movq %rsi, <offset:1>+8(%rsp)
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -777,9 +768,8 @@ block0(v0: i128):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block1: ; offset 0x8
-;   leaq (%rsp), %rcx
-;   movq %rdi, (%rcx)
-;   movq %rsi, 8(%rcx)
+;   movq %rdi, (%rsp)
+;   movq %rsi, 8(%rsp)
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -799,9 +789,8 @@ block0(v0: i128):
 ;   movq %rsp, %rbp
 ;   subq $0x20, %rsp
 ; block0:
-;   leaq <offset:1>+0x20(%rsp), %rcx
-;   movq %rdi, (%rcx)
-;   movq %rsi, 8(%rcx)
+;   movq %rdi, <offset:1>+0x20(%rsp)
+;   movq %rsi, <offset:1>+0x28(%rsp)
 ;   addq $0x20, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -813,9 +802,8 @@ block0(v0: i128):
 ;   movq %rsp, %rbp
 ;   subq $0x20, %rsp
 ; block1: ; offset 0x8
-;   leaq 0x20(%rsp), %rcx
-;   movq %rdi, (%rcx)
-;   movq %rsi, 8(%rcx)
+;   movq %rdi, 0x20(%rsp)
+;   movq %rsi, 0x28(%rsp)
 ;   addq $0x20, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -835,9 +823,8 @@ block0(v0: i128):
 ;   movq %rsp, %rbp
 ;   subq $0x186b0, %rsp
 ; block0:
-;   leaq <offset:1>+(%rsp), %rcx
-;   movq %rdi, (%rcx)
-;   movq %rsi, 8(%rcx)
+;   movq %rdi, <offset:1>+(%rsp)
+;   movq %rsi, <offset:1>+8(%rsp)
 ;   addq $0x186b0, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -849,9 +836,8 @@ block0(v0: i128):
 ;   movq %rsp, %rbp
 ;   subq $0x186b0, %rsp
 ; block1: ; offset 0xb
-;   leaq (%rsp), %rcx
-;   movq %rdi, (%rcx)
-;   movq %rsi, 8(%rcx)
+;   movq %rdi, (%rsp)
+;   movq %rsi, 8(%rsp)
 ;   addq $0x186b0, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -870,10 +856,8 @@ block0:
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
-;   leaq <offset:1>+(%rsp), %rax
-;   movq (%rax), %rdi
-;   movq 8(%rax), %rdx
-;   movq %rdi, %rax
+;   movq <offset:1>+(%rsp), %rax
+;   movq <offset:1>+8(%rsp), %rdx
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -885,10 +869,8 @@ block0:
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block1: ; offset 0x8
-;   leaq (%rsp), %rax
-;   movq (%rax), %rdi
-;   movq 8(%rax), %rdx
-;   movq %rdi, %rax
+;   movq (%rsp), %rax
+;   movq 8(%rsp), %rdx
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -908,10 +890,8 @@ block0:
 ;   movq %rsp, %rbp
 ;   subq $0x20, %rsp
 ; block0:
-;   leaq <offset:1>+0x20(%rsp), %rax
-;   movq (%rax), %rdi
-;   movq 8(%rax), %rdx
-;   movq %rdi, %rax
+;   movq <offset:1>+0x20(%rsp), %rax
+;   movq <offset:1>+0x28(%rsp), %rdx
 ;   addq $0x20, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -923,10 +903,8 @@ block0:
 ;   movq %rsp, %rbp
 ;   subq $0x20, %rsp
 ; block1: ; offset 0x8
-;   leaq 0x20(%rsp), %rax
-;   movq (%rax), %rdi
-;   movq 8(%rax), %rdx
-;   movq %rdi, %rax
+;   movq 0x20(%rsp), %rax
+;   movq 0x28(%rsp), %rdx
 ;   addq $0x20, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -946,10 +924,8 @@ block0:
 ;   movq %rsp, %rbp
 ;   subq $0x186b0, %rsp
 ; block0:
-;   leaq <offset:1>+(%rsp), %rax
-;   movq (%rax), %rdi
-;   movq 8(%rax), %rdx
-;   movq %rdi, %rax
+;   movq <offset:1>+(%rsp), %rax
+;   movq <offset:1>+8(%rsp), %rdx
 ;   addq $0x186b0, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -961,10 +937,8 @@ block0:
 ;   movq %rsp, %rbp
 ;   subq $0x186b0, %rsp
 ; block1: ; offset 0xb
-;   leaq (%rsp), %rax
-;   movq (%rax), %rdi
-;   movq 8(%rax), %rdx
-;   movq %rdi, %rax
+;   movq (%rsp), %rax
+;   movq 8(%rsp), %rdx
 ;   addq $0x186b0, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp

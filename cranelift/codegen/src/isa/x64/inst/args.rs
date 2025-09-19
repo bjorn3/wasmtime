@@ -573,6 +573,19 @@ impl SyntheticAmode {
             | SyntheticAmode::ConstantOffset { .. } => true,
         }
     }
+
+    pub(crate) fn offset(&self, off: i32) -> Self {
+        match self {
+            SyntheticAmode::Real(addr) => SyntheticAmode::Real(addr.offset(off)),
+            SyntheticAmode::IncomingArg { offset } => SyntheticAmode::IncomingArg {
+                offset: *offset + off as u32,
+            },
+            SyntheticAmode::SlotOffset { simm32 } => SyntheticAmode::SlotOffset {
+                simm32: *simm32 + off,
+            },
+            SyntheticAmode::ConstantOffset(_) => todo!(),
+        }
+    }
 }
 
 impl From<Amode> for SyntheticAmode {

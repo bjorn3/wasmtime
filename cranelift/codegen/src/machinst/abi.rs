@@ -2139,21 +2139,29 @@ impl<M: ABIMachineSpec> Callee<M> {
         }
     }
 
+    pub fn sized_stackslot_addr(&self, slot: StackSlot, offset: u32) -> StackAMode {
+        // Offset from beginning of stackslot area.
+        let stack_off = self.sized_stackslots[slot] as i64;
+        let sp_off: i64 = stack_off + (offset as i64);
+        StackAMode::Slot(sp_off)
+    }
+
     /// Produce an instruction that computes a sized stackslot address.
-    pub fn sized_stackslot_addr(
+    pub fn sized_stackslot_addr_inst(
         &self,
         slot: StackSlot,
         offset: u32,
         into_reg: Writable<Reg>,
     ) -> M::I {
-        // Offset from beginning of stackslot area.
-        let stack_off = self.sized_stackslots[slot] as i64;
-        let sp_off: i64 = stack_off + (offset as i64);
-        M::gen_get_stack_addr(StackAMode::Slot(sp_off), into_reg)
+        M::gen_get_stack_addr(self.sized_stackslot_addr(slot, offset), into_reg)
     }
 
     /// Produce an instruction that computes a dynamic stackslot address.
-    pub fn dynamic_stackslot_addr(&self, slot: DynamicStackSlot, into_reg: Writable<Reg>) -> M::I {
+    pub fn dynamic_stackslot_addr_inst(
+        &self,
+        slot: DynamicStackSlot,
+        into_reg: Writable<Reg>,
+    ) -> M::I {
         let stack_off = self.dynamic_stackslots[slot] as i64;
         M::gen_get_stack_addr(StackAMode::Slot(stack_off), into_reg)
     }

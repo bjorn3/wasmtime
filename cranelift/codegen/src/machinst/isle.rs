@@ -503,7 +503,7 @@ macro_rules! isle_lower_prelude_methods {
             let offset = u32::try_from(i32::from(offset)).unwrap();
             self.lower_ctx
                 .abi()
-                .sized_stackslot_addr(stack_slot, offset, dst)
+                .sized_stackslot_addr_inst(stack_slot, offset, dst)
                 .into()
         }
 
@@ -520,7 +520,7 @@ macro_rules! isle_lower_prelude_methods {
             );
             self.lower_ctx
                 .abi()
-                .dynamic_stackslot_addr(stack_slot, dst)
+                .dynamic_stackslot_addr_inst(stack_slot, dst)
                 .into()
         }
 

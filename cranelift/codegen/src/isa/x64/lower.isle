@@ -3018,6 +3018,7 @@
       (x64_movzx (ext_mode (ty_bits_u16 ty) 64) (to_amode flags address offset)))
 ;; But if we know that both the `from` and `to` are 64 bits, we simply load with
 ;; no extension.
+
 (rule load_64_x64_movzx -1 (lower (has_type (ty_int_ref_64 ty) (load (little_or_native_endian flags) address offset)))
       (x64_mov (to_amode flags address offset)))
 ;; Also, certain scalar loads have a specific `from` width and extension kind
@@ -3056,8 +3057,8 @@
 ;; We can load an I128 by doing two 64-bit loads.
 (rule -3 (lower (has_type $I128
                        (load (little_or_native_endian flags) address offset)))
-      (let ((addr_lo Amode (to_amode flags address offset))
-            (addr_hi Amode (amode_offset addr_lo 8))
+      (let ((addr_lo SyntheticAmode (to_amode flags address offset))
+            (addr_hi SyntheticAmode (amode_offset addr_lo 8))
             (value_lo Reg (x64_mov addr_lo))
             (value_hi Reg (x64_mov addr_hi)))
         (value_regs value_lo value_hi)))
@@ -3187,8 +3188,8 @@
       (let ((value_reg ValueRegs value)
             (value_lo Gpr (value_regs_get_gpr value_reg 0))
             (value_hi Gpr (value_regs_get_gpr value_reg 1))
-            (addr_lo Amode (to_amode flags address offset))
-            (addr_hi Amode (amode_offset addr_lo 8)))
+            (addr_lo SyntheticAmode (to_amode flags address offset))
+            (addr_hi SyntheticAmode (amode_offset addr_lo 8)))
       (side_effect
        (side_effect_concat
         (x64_movrm $I64 addr_lo value_lo)

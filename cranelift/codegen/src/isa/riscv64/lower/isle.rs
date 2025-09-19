@@ -581,7 +581,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         let i = self
             .lower_ctx
             .abi()
-            .sized_stackslot_addr(slot, i64::from(offset) as u32, result);
+            .sized_stackslot_addr_inst(slot, i64::from(offset) as u32, result);
         self.emit(&i);
         result.to_reg()
     }

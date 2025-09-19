@@ -420,14 +420,14 @@
 
              ;; Sign-extend-32-to-64(immediate) + RIP (instruction
              ;; pointer). The appropriate relocation is emitted so
-             ;; that the resulting immediate makes this Amode refer to
+             ;; that the resulting immediate makes this SyntheticAmode refer to
              ;; the given MachLabel.
              (RipRelative (target MachLabel))))
 
-;; Model an Amode as a combination of flags and the calculated 64-bit address.
+;; Model an SyntheticAmode as a combination of flags and the calculated 64-bit address.
 ;;   16 bits     64 bits
 ;; [ flags  |    address    ]
-(model Amode (type (bv 80)))
+(model SyntheticAmode (type (bv 80)))
 
 (spec (Amode.ImmReg simm base flags)
       (provide (= result (concat flags (bvadd base (sign_ext 64 simm)))))
@@ -456,7 +456,7 @@
 (decl pure partial sum_extend_fits_in_32_bits (Type Imm64 Offset32) u32)
 (extern constructor sum_extend_fits_in_32_bits sum_extend_fits_in_32_bits)
 
-;;;; Amode lowering ;;;;
+;;;; SyntheticAmode lowering ;;;;
 
 ;; Converts a `Value` and a static offset into an `Amode` for x64, attempting
 ;; to be as fancy as possible with offsets/registers/shifts/etc to make maximal
@@ -481,11 +481,12 @@
 ;; attempt to find one constant as opposed to many, and that'll only happen
 ;; with constant folding from optimizations.
 ;;
-;; Finally there's two primary entry points for this function. One is this
-;; function here, `to_amode,` and another is `to_amode_add`. The latter is used
-;; by the lowering of `iadd` in the x64 backend to use the `lea` instruction
-;; where the input is two `Value` operands instead of just one. Most of the
-;; logic here is then deferred through `to_amode_add`.
+;; Finally there's three primary entry points for this function. One is this
+;; function here, `to_amode`, the next is `to_amode_add` and another is
+;; `to_amode_stack`. The second is used by the lowering of `iadd` in the x64
+;; backend to use the `lea` instruction where the input is two `Value` operands
+;; instead of just one. Most of the logic here is then deferred through `to_amode_add`.
+;; The third is to use direct `mov` instructions for stack accesses.
 ;;
 ;; In the future if mid-end optimizations fold constants into `Offset32` then
 ;; this in theory can "simply" delegate to the `amode_imm_reg` helper, and
@@ -494,20 +495,25 @@
       (provide (= result (concat flags (bvadd val (sign_ext 64 offset)))))
       (require
             (= (widthof val) 64)))
-(decl to_amode (MemFlags Value Offset32) Amode)
+(decl to_amode (MemFlags Value Offset32) SyntheticAmode)
 (rule 0 (to_amode flags base offset)
         (amode_imm_reg flags base offset))
 (rule 1 (to_amode flags (iadd x y) offset)
         (to_amode_add flags x y offset))
+(rule 2 (to_amode flags (stack_addr slot offset1) offset2)
+        (amode_stack slot offset1 offset2))
+
+(decl amode_stack (StackSlot Offset32 Offset32) SyntheticAmode)
+(extern constructor amode_stack amode_stack)
 
 ;; Same as `to_amode`, except that the base address is computed via the addition
 ;; of the two `Value` arguments provided.
 ;;
 ;; The primary purpose of this is to hunt for constants within the two `Value`
 ;; operands provided. Failing that this will defer to `amode_imm_reg` or
-;; `amode_imm_reg_reg_shift` which is the final step in amode lowering and
+;; `amode_imm_reg_reg_shift` which is the final step in SyntheticAmode lowering and
 ;; performs final pattern matches related to shifts to see if that can be
-;; peeled out into the amode.
+;; peeled out into the SyntheticAmode.
 ;;
 ;; In other words this function's job is to find constants and then defer to
 ;; `amode_imm_reg*`.
@@ -516,7 +522,7 @@
       (provide (= result (concat flags (bvadd (bvadd (sign_ext 64 x) (sign_ext 64 y)) (sign_ext 64 offset))))))
 (instantiate to_amode_add
     ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
-(decl to_amode_add (MemFlags Value Value Offset32) Amode)
+(decl to_amode_add (MemFlags Value Value Offset32) SyntheticAmode)
 
 (rule to_amode_add_base_case 0 (to_amode_add flags x y offset)
         (amode_imm_reg_reg_shift flags x y offset))
@@ -539,14 +545,14 @@
         (if-let sum (i32_checked_add offset c))
         (amode_imm_reg_reg_shift flags x y sum))
 
-;; Final cases of amode lowering. Does not hunt for constants and only attempts
+;; Final cases of SyntheticAmode lowering. Does not hunt for constants and only attempts
 ;; to pattern match add-of-shifts to generate fancier `ImmRegRegShift` modes,
 ;; otherwise falls back on `ImmReg`.
 (spec (amode_imm_reg flags x offset)
       (provide (= result (concat flags (bvadd (sign_ext 64 x) (sign_ext 64 offset))))))
 (instantiate amode_imm_reg
     ((args (bv 16) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
-(decl amode_imm_reg (MemFlags Value Offset32) Amode)
+(decl amode_imm_reg (MemFlags Value Offset32) SyntheticAmode)
 (rule amode_imm_reg_base 0 (amode_imm_reg flags base offset)
         (Amode.ImmReg offset base flags))
 (rule amode_imm_reg_iadd 1 (amode_imm_reg flags (iadd x y) offset)
@@ -560,7 +566,7 @@
             (= (widthof offset) 32)))
 (instantiate amode_imm_reg_reg_shift
     ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
-(decl amode_imm_reg_reg_shift (MemFlags Value Value Offset32) Amode)
+(decl amode_imm_reg_reg_shift (MemFlags Value Value Offset32) SyntheticAmode)
 (rule amode_imm_reg_reg_shift_no_shift 0 (amode_imm_reg_reg_shift flags x y offset)
         (Amode.ImmRegRegShift offset x y 0 flags)) ;; 0 == y<<0 == "no shift"
 (rule amode_imm_reg_reg_shift_shl_rhs 1 (amode_imm_reg_reg_shift flags x (ishl y (iconst (uimm8 shift))) offset)
@@ -570,9 +576,9 @@
         (if-let true (u32_lt_eq shift 3))
         (Amode.ImmRegRegShift offset x y shift flags))
 
-;; Offsetting an Amode. Used when we need to do consecutive
+;; Offsetting an SyntheticAmode. Used when we need to do consecutive
 ;; loads/stores to adjacent addresses.
-(decl amode_offset (Amode i32) Amode)
+(decl amode_offset (SyntheticAmode i32) SyntheticAmode)
 (extern constructor amode_offset amode_offset)
 
 ;; Return a zero offset as an `Offset32`.
@@ -1368,7 +1374,7 @@
 (rule 0 (x64_load (multi_lane _bits _lanes) addr _ext_kind)
       (x64_movdqu_load addr))
 
-(decl x64_mov (Amode) Reg)
+(decl x64_mov (SyntheticAmode) Reg)
 (spec (x64_mov addr)
       (provide (= result (conv_to 64 (load_effect (extract 79 64 addr) 64 (extract 63 0 addr))))))
 (rule (x64_mov addr) (x64_movq_rm addr))
@@ -2701,25 +2707,25 @@
 (decl x64_pextrb (Xmm u8) Gpr)
 (rule (x64_pextrb src lane) (x64_pextrb_a_or_avx src lane))
 
-(decl x64_pextrb_store (Amode Xmm u8) SideEffectNoResult)
+(decl x64_pextrb_store (SyntheticAmode Xmm u8) SideEffectNoResult)
 (rule (x64_pextrb_store addr src lane) (x64_pextrb_a_mem_or_avx addr src lane))
 
 (decl x64_pextrw (Xmm u8) Gpr)
 (rule (x64_pextrw src lane) (x64_pextrw_a_or_avx src lane))
 
-(decl x64_pextrw_store (Amode Xmm u8) SideEffectNoResult)
+(decl x64_pextrw_store (SyntheticAmode Xmm u8) SideEffectNoResult)
 (rule (x64_pextrw_store addr src lane) (x64_pextrw_b_mem_or_avx addr src lane))
 
 (decl x64_pextrd (Xmm u8) Gpr)
 (rule (x64_pextrd src lane) (x64_pextrd_a_or_avx src lane))
 
-(decl x64_pextrd_store (Amode Xmm u8) SideEffectNoResult)
+(decl x64_pextrd_store (SyntheticAmode Xmm u8) SideEffectNoResult)
 (rule (x64_pextrd_store addr src lane) (x64_pextrd_a_mem_or_avx addr src lane))
 
 (decl x64_pextrq (Xmm u8) Gpr)
 (rule (x64_pextrq src lane) (x64_pextrq_a_or_avx src lane))
 
-(decl x64_pextrq_store (Amode Xmm u8) SideEffectNoResult)
+(decl x64_pextrq_store (SyntheticAmode Xmm u8) SideEffectNoResult)
 (rule (x64_pextrq_store addr src lane) (x64_pextrq_a_mem_or_avx addr src lane))
 
 ;; Helper for creating `pmovmskb` instructions.
@@ -2765,8 +2771,8 @@
 (rule (x64_neg_paired ty src)
       (asm_produce_flags (x64_neg_raw ty src)))
 
-(spec (x64_lea ty amode)
-      (provide (= result amode))
+(spec (x64_lea ty SyntheticAmode)
+      (provide (= result SyntheticAmode))
       (require (or (= ty 32) (= ty 64))))
 (decl x64_lea (Type SyntheticAmode) Gpr)
 (rule (x64_lea $I16 addr) (x64_leaw_rm addr))
@@ -3181,7 +3187,7 @@
           )
           (x64_por low_gt_and_high_eq high_halves_gt)))
 
-(decl x64_add_mem (Type Amode Value) SideEffectNoResult)
+(decl x64_add_mem (Type SyntheticAmode Value) SideEffectNoResult)
 (spec (x64_add_mem ty addr val)
       (provide (= result (store_effect
                         (extract 79 64 addr)
@@ -3207,7 +3213,7 @@
 (rule 2 (x64_add_mem $I32 addr (i8_from_iconst val)) (x64_addl_mi_sxb_mem addr val))
 (rule 2 (x64_add_mem $I64 addr (i8_from_iconst val)) (x64_addq_mi_sxb_mem addr val))
 
-(decl x64_sub_mem (Type Amode Value) SideEffectNoResult)
+(decl x64_sub_mem (Type SyntheticAmode Value) SideEffectNoResult)
 
 ;; `sub mem, reg`
 (rule 0 (x64_sub_mem $I8 addr val) (x64_subb_mr_mem addr val))
@@ -3223,7 +3229,7 @@
 (rule 2 (x64_sub_mem $I32 addr (i8_from_iconst val)) (x64_subl_mi_sxb_mem addr val))
 (rule 2 (x64_sub_mem $I64 addr (i8_from_iconst val)) (x64_subq_mi_sxb_mem addr val))
 
-(decl x64_and_mem (Type Amode Value) SideEffectNoResult)
+(decl x64_and_mem (Type SyntheticAmode Value) SideEffectNoResult)
 
 ;; `and mem, imm`
 (rule (x64_and_mem $I8 addr val) (x64_andb_mr_mem addr val))
@@ -3241,7 +3247,7 @@
 (rule 2 (x64_and_mem $I32 addr (i8_from_iconst val)) (x64_andl_mi_sxb_mem addr val))
 (rule 2 (x64_and_mem $I64 addr (i8_from_iconst val)) (x64_andq_mi_sxb_mem addr val))
 
-(decl x64_or_mem (Type Amode Value) SideEffectNoResult)
+(decl x64_or_mem (Type SyntheticAmode Value) SideEffectNoResult)
 
 ;; `or mem, reg`
 (rule 0 (x64_or_mem $I8 addr val) (x64_orb_mr_mem addr val))
@@ -3259,7 +3265,7 @@
 (rule 2 (x64_or_mem $I32 addr (i8_from_iconst val)) (x64_orl_mi_sxb_mem addr val))
 (rule 2 (x64_or_mem $I64 addr (i8_from_iconst val)) (x64_orq_mi_sxb_mem addr val))
 
-(decl x64_xor_mem (Type Amode Value) SideEffectNoResult)
+(decl x64_xor_mem (Type SyntheticAmode Value) SideEffectNoResult)
 
 ;; `xor mem, reg`
 (rule 0 (x64_xor_mem $I8 addr val) (x64_xorb_mr_mem addr val))
@@ -3644,31 +3650,31 @@
 (rule (x64_xchg $I32 addr operand) (x64_xchgl_rm operand addr))
 (rule (x64_xchg $I64 addr operand) (x64_xchgq_rm operand addr))
 
-(decl x64_lock_add (OperandSize Amode Gpr) SideEffectNoResult)
+(decl x64_lock_add (OperandSize SyntheticAmode Gpr) SideEffectNoResult)
 (rule (x64_lock_add (OperandSize.Size8) addr reg)   (x64_lock_addb_mr_mem addr reg))
 (rule (x64_lock_add (OperandSize.Size16) addr reg)  (x64_lock_addw_mr_mem addr reg))
 (rule (x64_lock_add (OperandSize.Size32) addr reg)  (x64_lock_addl_mr_mem addr reg))
 (rule (x64_lock_add (OperandSize.Size64) addr reg)  (x64_lock_addq_mr_mem addr reg))
 
-(decl x64_lock_sub (OperandSize Amode Gpr) SideEffectNoResult)
+(decl x64_lock_sub (OperandSize SyntheticAmode Gpr) SideEffectNoResult)
 (rule (x64_lock_sub (OperandSize.Size8) addr reg)   (x64_lock_subb_mr_mem addr reg))
 (rule (x64_lock_sub (OperandSize.Size16) addr reg)  (x64_lock_subw_mr_mem addr reg))
 (rule (x64_lock_sub (OperandSize.Size32) addr reg)  (x64_lock_subl_mr_mem addr reg))
 (rule (x64_lock_sub (OperandSize.Size64) addr reg)  (x64_lock_subq_mr_mem addr reg))
 
-(decl x64_lock_and (OperandSize Amode Gpr) SideEffectNoResult)
+(decl x64_lock_and (OperandSize SyntheticAmode Gpr) SideEffectNoResult)
 (rule (x64_lock_and (OperandSize.Size8) addr reg)   (x64_lock_andb_mr_mem addr reg))
 (rule (x64_lock_and (OperandSize.Size16) addr reg)  (x64_lock_andw_mr_mem addr reg))
 (rule (x64_lock_and (OperandSize.Size32) addr reg)  (x64_lock_andl_mr_mem addr reg))
 (rule (x64_lock_and (OperandSize.Size64) addr reg)  (x64_lock_andq_mr_mem addr reg))
 
-(decl x64_lock_or (OperandSize Amode Gpr) SideEffectNoResult)
+(decl x64_lock_or (OperandSize SyntheticAmode Gpr) SideEffectNoResult)
 (rule (x64_lock_or (OperandSize.Size8) addr reg)   (x64_lock_orb_mr_mem addr reg))
 (rule (x64_lock_or (OperandSize.Size16) addr reg)  (x64_lock_orw_mr_mem addr reg))
 (rule (x64_lock_or (OperandSize.Size32) addr reg)  (x64_lock_orl_mr_mem addr reg))
 (rule (x64_lock_or (OperandSize.Size64) addr reg)  (x64_lock_orq_mr_mem addr reg))
 
-(decl x64_lock_xor (OperandSize Amode Gpr) SideEffectNoResult)
+(decl x64_lock_xor (OperandSize SyntheticAmode Gpr) SideEffectNoResult)
 (rule (x64_lock_xor (OperandSize.Size8) addr reg)   (x64_lock_xorb_mr_mem addr reg))
 (rule (x64_lock_xor (OperandSize.Size16) addr reg)  (x64_lock_xorw_mr_mem addr reg))
 (rule (x64_lock_xor (OperandSize.Size32) addr reg)  (x64_lock_xorl_mr_mem addr reg))
@@ -4012,14 +4018,14 @@
 
 (spec (amode_to_gpr_mem amode)
       (provide (= result amode)))
-(decl amode_to_gpr_mem (Amode) GprMem)
+(decl amode_to_gpr_mem (SyntheticAmode) GprMem)
 (rule (amode_to_gpr_mem amode)
-      (amode_to_synthetic_amode amode))
+      amode)
 (rule (synthetic_amode_to_gpr_mem amode)
       (synthetic_amode_to_reg_mem amode))
-(decl amode_to_xmm_mem (Amode) XmmMem)
+(decl amode_to_xmm_mem (SyntheticAmode) XmmMem)
 (rule (amode_to_xmm_mem amode)
-      (amode_to_synthetic_amode amode))
+      amode)
 (decl synthetic_amode_to_xmm_mem (SyntheticAmode) XmmMem)
 (rule (synthetic_amode_to_xmm_mem amode)
       (synthetic_amode_to_reg_mem amode))
@@ -4032,7 +4038,7 @@
 
 (decl xmm_to_xmm_mem_aligned (Xmm) XmmMemAligned)
 (rule (xmm_to_xmm_mem_aligned reg) (xmm_mem_to_xmm_mem_aligned reg))
-(decl amode_to_xmm_mem_aligned (Amode) XmmMemAligned)
+(decl amode_to_xmm_mem_aligned (SyntheticAmode) XmmMemAligned)
 (rule (amode_to_xmm_mem_aligned mode) (amode_to_xmm_mem mode))
 (decl synthetic_amode_to_xmm_mem_aligned (SyntheticAmode) XmmMemAligned)
 (rule (synthetic_amode_to_xmm_mem_aligned mode) (synthetic_amode_to_xmm_mem mode))
