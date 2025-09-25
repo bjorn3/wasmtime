@@ -192,9 +192,10 @@ impl TestCase {
         // generating a TargetIsa for the host.
         let mut builder =
             builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
-        let flags = generator.generate_flags(builder.triple().architecture)?;
         generator.set_isa_flags(&mut builder, IsaFlagGen::Host)?;
-        let isa = builder.finish(flags)?;
+        let isa = builder.finish(generator.generate_flags(builder.triple().architecture, true)?)?;
+        let isa_without_verifier =
+            builder.finish(generator.generate_flags(builder.triple().architecture, false)?)?;
 
         // When generating functions, we allow each function to call any function that has
         // already been generated. This guarantees that we never have loops in the call graph.
@@ -222,6 +223,7 @@ impl TestCase {
             let func = generator.generate_func(
                 fname,
                 isa.clone(),
+                &*isa_without_verifier,
                 usercalls,
                 ALLOWED_LIBCALLS.to_vec(),
             )?;

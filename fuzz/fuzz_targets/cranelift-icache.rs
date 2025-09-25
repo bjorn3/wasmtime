@@ -56,12 +56,18 @@ impl FunctionWithIsa {
         let architecture = builder.triple().architecture;
 
         let mut generator = FuzzGen::new(u);
-        let flags = generator
-            .generate_flags(architecture)
-            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
         generator.set_isa_flags(&mut builder, IsaFlagGen::All)?;
+        let flags = generator
+            .generate_flags(architecture, true)
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
         let isa = builder
             .finish(flags)
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+        let flags_without_verifier = generator
+            .generate_flags(architecture, false)
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+        let isa_without_verifier = builder
+            .finish(flags_without_verifier)
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
         // Function name must be in a different namespace than TESTFILE_NAMESPACE (0)
@@ -81,7 +87,13 @@ impl FunctionWithIsa {
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
         let func = generator
-            .generate_func(fname, isa.clone(), usercalls, ALLOWED_LIBCALLS.to_vec())
+            .generate_func(
+                fname,
+                isa.clone(),
+                &*isa_without_verifier,
+                usercalls,
+                ALLOWED_LIBCALLS.to_vec(),
+            )
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
         Ok(FunctionWithIsa { isa, func })
