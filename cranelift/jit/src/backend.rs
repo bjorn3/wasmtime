@@ -6,7 +6,6 @@ use crate::{
 };
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
-use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{ir, settings};
 use cranelift_control::ControlPlane;
 use cranelift_entity::SecondaryMap;

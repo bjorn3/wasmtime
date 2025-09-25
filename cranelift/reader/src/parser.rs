@@ -27,7 +27,7 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
-use cranelift_codegen::{settings, settings::Configurable, timing};
+use cranelift_codegen::{settings, timing};
 use smallvec::SmallVec;
 use std::mem;
 use std::str::FromStr;

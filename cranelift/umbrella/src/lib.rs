@@ -31,7 +31,7 @@ pub mod prelude {
         MemFlags, Signature, StackSlotData, StackSlotKind, TrapCode, Type, Value,
     };
     pub use crate::codegen::isa;
-    pub use crate::codegen::settings::{self, Configurable};
+    pub use crate::codegen::settings;
 
     #[cfg(feature = "frontend")]
     pub use crate::frontend::{FunctionBuilder, FunctionBuilderContext, Variable};

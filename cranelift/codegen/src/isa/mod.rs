@@ -162,7 +162,7 @@ impl fmt::Display for LookupError {
 pub type OwnedTargetIsa = Arc<dyn TargetIsa>;
 
 /// Type alias of `IsaBuilder` used for building Cranelift's ISAs.
-pub type Builder = IsaBuilder<CodegenResult<OwnedTargetIsa>>;
+pub type Builder = IsaBuilder<OwnedTargetIsa>;
 
 /// Builder for a `TargetIsa`.
 /// Modify the ISA-specific settings before creating the `TargetIsa` trait object with `finish`.
@@ -170,7 +170,7 @@ pub type Builder = IsaBuilder<CodegenResult<OwnedTargetIsa>>;
 pub struct IsaBuilder<T> {
     triple: Triple,
     setup: settings::Builder,
-    constructor: fn(Triple, settings::Flags, &settings::Builder) -> T,
+    constructor: fn(Triple, settings::Flags, &settings::Builder) -> CodegenResult<T>,
 }
 
 impl<T> IsaBuilder<T> {
@@ -180,7 +180,7 @@ impl<T> IsaBuilder<T> {
     pub fn new(
         triple: Triple,
         setup: settings::Builder,
-        constructor: fn(Triple, settings::Flags, &settings::Builder) -> T,
+        constructor: fn(Triple, settings::Flags, &settings::Builder) -> CodegenResult<T>,
     ) -> Self {
         IsaBuilder {
             triple,
@@ -205,17 +205,23 @@ impl<T> IsaBuilder<T> {
     /// flags are inconsistent or incompatible: for example, some
     /// platform-independent features, like general SIMD support, may
     /// need certain ISA extensions to be enabled.
-    pub fn finish(&self, shared_flags: settings::Flags) -> T {
+    pub fn finish(&self, shared_flags: settings::Flags) -> CodegenResult<T> {
         (self.constructor)(self.triple.clone(), shared_flags, &self.setup)
     }
 }
 
-impl<T> settings::Configurable for IsaBuilder<T> {
-    fn set(&mut self, name: &str, value: &str) -> SetResult<()> {
+impl<T> IsaBuilder<T> {
+    /// Set the string value of any setting by name.
+    ///
+    /// This can set any type of setting whether it is numeric, boolean, or enumerated.
+    pub fn set(&mut self, name: &str, value: &str) -> SetResult<()> {
         self.setup.set(name, value)
     }
 
-    fn enable(&mut self, name: &str) -> SetResult<()> {
+    /// Enable a boolean setting or apply a preset.
+    ///
+    /// If the identified setting isn't a boolean or a preset, a `BadType` error is returned.
+    pub fn enable(&mut self, name: &str) -> SetResult<()> {
         self.setup.enable(name)
     }
 }

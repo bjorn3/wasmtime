@@ -1,6 +1,6 @@
 use anyhow::Result;
 use cranelift_codegen::isa::IsaBuilder as Builder;
-use cranelift_codegen::settings::{self, Configurable, Flags, SetError};
+use cranelift_codegen::settings::{self, Flags, SetError};
 use target_lexicon::Triple;
 use wasmtime_environ::{Setting, SettingKind};
 

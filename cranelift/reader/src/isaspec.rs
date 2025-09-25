@@ -8,8 +8,8 @@
 
 use crate::error::{Location, ParseError};
 use crate::testcommand::TestOption;
-use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
-use cranelift_codegen::settings::{Configurable, Flags, SetError};
+use cranelift_codegen::isa::{self, OwnedTargetIsa, TargetIsa};
+use cranelift_codegen::settings::{self, Flags, SetError, SetResult};
 
 /// The ISA specifications in a `.clif` file.
 pub enum IsaSpec {
@@ -84,6 +84,31 @@ macro_rules! option_err {
             is_warning: false,
         }))
     };
+}
+
+pub trait Configurable {
+    fn set(&mut self, name: &str, value: &str) -> SetResult<()>;
+    fn enable(&mut self, name: &str) -> SetResult<()>;
+}
+
+impl Configurable for settings::Builder {
+    fn set(&mut self, name: &str, value: &str) -> SetResult<()> {
+        self.set(name, value)
+    }
+
+    fn enable(&mut self, name: &str) -> SetResult<()> {
+        self.enable(name)
+    }
+}
+
+impl Configurable for isa::Builder {
+    fn set(&mut self, name: &str, value: &str) -> SetResult<()> {
+        self.set(name, value)
+    }
+
+    fn enable(&mut self, name: &str) -> SetResult<()> {
+        self.enable(name)
+    }
 }
 
 /// Parse an iterator of command line options and apply them to `config`.

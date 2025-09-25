@@ -9,7 +9,7 @@ use anyhow::Context as _;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::Type;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
-use cranelift_codegen::settings::{Configurable, Flags};
+use cranelift_codegen::settings::Flags;
 use cranelift_codegen::{ir, settings};
 use cranelift_reader::TestCommand;
 use cranelift_reader::{TestFile, parse_run_command};

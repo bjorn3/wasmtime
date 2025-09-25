@@ -27,22 +27,6 @@ use alloc::string::{String, ToString};
 use core::fmt;
 use core::str;
 
-/// A string-based configurator for settings groups.
-///
-/// The `Configurable` protocol allows settings to be modified by name before a finished `Flags`
-/// struct is created.
-pub trait Configurable {
-    /// Set the string value of any setting by name.
-    ///
-    /// This can set any type of setting whether it is numeric, boolean, or enumerated.
-    fn set(&mut self, name: &str, value: &str) -> SetResult<()>;
-
-    /// Enable a boolean setting or apply a preset.
-    ///
-    /// If the identified setting isn't a boolean or a preset, a `BadType` error is returned.
-    fn enable(&mut self, name: &str) -> SetResult<()>;
-}
-
 /// Represents the kind of setting.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SettingKind {
@@ -238,8 +222,11 @@ fn parse_enum_value(value: &str, choices: &[&str]) -> SetResult<u8> {
     }
 }
 
-impl Configurable for Builder {
-    fn enable(&mut self, name: &str) -> SetResult<()> {
+impl Builder {
+    /// Enable a boolean setting or apply a preset.
+    ///
+    /// If the identified setting isn't a boolean or a preset, a `BadType` error is returned.
+    pub fn enable(&mut self, name: &str) -> SetResult<()> {
         use self::detail::Detail;
         let (offset, detail) = self.lookup(name)?;
         match detail {
@@ -255,7 +242,10 @@ impl Configurable for Builder {
         }
     }
 
-    fn set(&mut self, name: &str, value: &str) -> SetResult<()> {
+    /// Set the string value of any setting by name.
+    ///
+    /// This can set any type of setting whether it is numeric, boolean, or enumerated.
+    pub fn set(&mut self, name: &str, value: &str) -> SetResult<()> {
         use self::detail::Detail;
         let (offset, detail) = self.lookup(name)?;
         match detail {

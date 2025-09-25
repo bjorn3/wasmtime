@@ -4,7 +4,6 @@
 #![deny(missing_docs)]
 
 use cranelift_codegen::isa;
-use cranelift_codegen::settings::Configurable;
 use target_lexicon::Triple;
 
 #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
@@ -42,7 +41,7 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
 /// Selects the given backend variant specifically; this is
 /// useful when more than one backend exists for a given target
 /// (e.g., on x86-64).
-pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'static str> {
+pub fn infer_native_flags(isa_builder: &mut isa::Builder) -> Result<(), &'static str> {
     #[cfg(target_arch = "x86_64")]
     {
         if !std::is_x86_feature_detected!("sse2") {
