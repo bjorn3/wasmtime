@@ -153,7 +153,7 @@ pub struct Builder {
 
 impl Builder {
     /// Create a new builder with defaults and names from the given template.
-    pub fn new(tmpl: &'static detail::Template) -> Self {
+    pub(crate) fn new(tmpl: &'static detail::Template) -> Self {
         Self {
             template: tmpl,
             bytes: tmpl.defaults.into(),
@@ -161,7 +161,7 @@ impl Builder {
     }
 
     /// Extract contents of builder once everything is configured.
-    pub fn state_for(&self, name: &str) -> &[u8] {
+    pub(crate) fn state_for(&self, name: &str) -> &[u8] {
         assert_eq!(name, self.template.name);
         &self.bytes
     }
@@ -313,31 +313,31 @@ pub type SetResult<T> = Result<T, SetError>;
 ///
 /// This module holds definitions that need to be public so the can be instantiated by generated
 /// code in other modules.
-pub mod detail {
+pub(crate) mod detail {
     use crate::constant_hash;
     use core::fmt;
     use core::hash::Hash;
 
     /// An instruction group template.
     #[derive(Hash)]
-    pub struct Template {
+    pub(crate) struct Template {
         /// Name of the instruction group.
-        pub name: &'static str,
+        pub(crate) name: &'static str,
         /// List of setting descriptors.
-        pub descriptors: &'static [Descriptor],
+        pub(crate) descriptors: &'static [Descriptor],
         /// Union of all enumerators.
-        pub enumerators: &'static [&'static str],
+        pub(crate) enumerators: &'static [&'static str],
         /// Hash table of settings.
-        pub hash_table: &'static [u16],
+        pub(crate) hash_table: &'static [u16],
         /// Default values.
-        pub defaults: &'static [u8],
+        pub(crate) defaults: &'static [u8],
         /// Pairs of (mask, value) for presets.
-        pub presets: &'static [(u8, u8)],
+        pub(crate) presets: &'static [(u8, u8)],
     }
 
     impl Template {
         /// Get enumerators corresponding to a `Details::Enum`.
-        pub fn enums(&self, last: u8, enumerators: u16) -> &[&'static str] {
+        pub(crate) fn enums(&self, last: u8, enumerators: u16) -> &[&'static str] {
             let from = enumerators as usize;
             let len = usize::from(last) + 1;
             &self.enumerators[from..from + len]
@@ -345,7 +345,7 @@ pub mod detail {
 
         /// Format a setting value as a TOML string. This is mostly for use by the generated
         /// `Display` implementation.
-        pub fn format_toml_value(
+        pub(crate) fn format_toml_value(
             &self,
             detail: Detail,
             byte: u8,
@@ -388,23 +388,23 @@ pub mod detail {
     ///
     /// Each settings group will be represented as a constant DESCRIPTORS array.
     #[derive(Hash)]
-    pub struct Descriptor {
+    pub(crate) struct Descriptor {
         /// Lower snake-case name of setting as defined in meta.
-        pub name: &'static str,
+        pub(crate) name: &'static str,
 
         /// The description of the setting.
-        pub description: &'static str,
+        pub(crate) description: &'static str,
 
         /// Offset of byte containing this setting.
-        pub offset: u32,
+        pub(crate) offset: u32,
 
         /// Additional details, depending on the kind of setting.
-        pub detail: Detail,
+        pub(crate) detail: Detail,
     }
 
     /// The different kind of settings along with descriptor bits that depend on the kind.
     #[derive(Clone, Copy, Hash)]
-    pub enum Detail {
+    pub(crate) enum Detail {
         /// A boolean setting only uses one bit, numbered from LSB.
         Bool {
             /// 0-7.
@@ -432,7 +432,7 @@ pub mod detail {
     impl Detail {
         /// Check if a detail is a Detail::Preset. Useful because the Descriptor
         /// offset field has a different meaning when the detail is a preset.
-        pub fn is_preset(self) -> bool {
+        pub(crate) fn is_preset(self) -> bool {
             match self {
                 Self::Preset => true,
                 _ => false,
