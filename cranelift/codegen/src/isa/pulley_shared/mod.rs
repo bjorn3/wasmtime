@@ -276,14 +276,14 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
 fn isa_constructor_32(
     triple: Triple,
     shared_flags: Flags,
-    builder: &shared_settings::Builder,
+    builder: shared_settings::Builder,
 ) -> CodegenResult<OwnedTargetIsa> {
     let mut builder = builder.clone();
     builder.set("pointer_width", "pointer32").unwrap();
     if triple.endianness().unwrap() == target_lexicon::Endianness::Big {
         builder.enable("big_endian").unwrap();
     }
-    let isa_flags = PulleyFlags::new(&shared_flags, &builder);
+    let isa_flags = PulleyFlags::new(builder);
 
     let backend =
         PulleyBackend::<super::pulley32::Pulley32>::new_with_flags(triple, shared_flags, isa_flags);
@@ -293,14 +293,14 @@ fn isa_constructor_32(
 fn isa_constructor_64(
     triple: Triple,
     shared_flags: Flags,
-    builder: &shared_settings::Builder,
+    builder: shared_settings::Builder,
 ) -> CodegenResult<OwnedTargetIsa> {
     let mut builder = builder.clone();
     builder.set("pointer_width", "pointer64").unwrap();
     if triple.endianness().unwrap() == target_lexicon::Endianness::Big {
         builder.enable("big_endian").unwrap();
     }
-    let isa_flags = PulleyFlags::new(&shared_flags, &builder);
+    let isa_flags = PulleyFlags::new(builder);
 
     let backend =
         PulleyBackend::<super::pulley64::Pulley64>::new_with_flags(triple, shared_flags, isa_flags);

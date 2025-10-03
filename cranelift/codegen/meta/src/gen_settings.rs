@@ -8,23 +8,11 @@ use cranelift_codegen_shared::constant_hash::simple_hash;
 use cranelift_srcgen::{Formatter, Language, Match, error, fmtln};
 use std::collections::HashMap;
 
-pub(crate) enum ParentGroup {
-    None,
-    Shared,
-}
-
 /// Emits the constructor of the Flags structure.
-fn gen_constructor(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
-    let args = match parent {
-        ParentGroup::None => "builder: Builder",
-        ParentGroup::Shared => "shared: &settings::Flags, builder: &Builder",
-    };
+fn gen_constructor(group: &SettingGroup, fmt: &mut Formatter) {
+    let args = "builder: Builder";
     fmt.add_block("impl Flags", |fmt| {
         fmt.doc_comment(format!("Create flags {} settings group.", group.name));
-        fmtln!(
-            fmt,
-            "#[allow(unused_variables, reason = \"generated code\")]"
-        );
         fmt.add_block(&format!("pub fn new({args}) -> Self"), |fmt| {
             fmtln!(fmt, "let bvec = builder.state_for(\"{}\");", group.name);
             fmtln!(
@@ -392,7 +380,7 @@ fn gen_hash_key(fmt: &mut Formatter) {
     });
 }
 
-fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
+fn gen_group(group: &SettingGroup, fmt: &mut Formatter) {
     // Generate struct.
     fmtln!(fmt, "#[derive(Clone, PartialEq, Hash)]");
     fmt.doc_comment(format!("Flags group `{}`.", group.name));
@@ -400,7 +388,7 @@ fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
         fmtln!(fmt, "bytes: [u8; {}],", group.byte_size());
     });
 
-    gen_constructor(group, parent, fmt);
+    gen_constructor(group, fmt);
     gen_iterator(group, fmt);
     gen_enum_types(group, fmt);
     gen_getters(group, fmt);
@@ -412,12 +400,11 @@ fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
 
 pub(crate) fn generate(
     settings: &SettingGroup,
-    parent_group: ParentGroup,
     filename: &str,
     out_dir: &std::path::Path,
 ) -> Result<(), error::Error> {
     let mut fmt = Formatter::new(Language::Rust);
-    gen_group(settings, parent_group, &mut fmt);
+    gen_group(settings, &mut fmt);
     fmt.write(filename, out_dir)?;
     Ok(())
 }

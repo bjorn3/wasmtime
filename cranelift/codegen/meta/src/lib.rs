@@ -39,12 +39,7 @@ fn generate_rust_for_shared_defs(
     isas: &[isa::Isa],
     out_dir: &std::path::Path,
 ) -> Result<(), error::Error> {
-    gen_settings::generate(
-        &shared_defs.settings,
-        gen_settings::ParentGroup::None,
-        "settings.rs",
-        out_dir,
-    )?;
+    gen_settings::generate(&shared_defs.settings, "settings.rs", out_dir)?;
 
     gen_types::generate("types.rs", out_dir)?;
 
@@ -58,12 +53,7 @@ fn generate_rust_for_shared_defs(
 
     // Per ISA definitions.
     for isa in isa::define(isas) {
-        gen_settings::generate(
-            &isa.settings,
-            gen_settings::ParentGroup::Shared,
-            &format!("settings-{}.rs", isa.name),
-            out_dir,
-        )?;
+        gen_settings::generate(&isa.settings, &format!("settings-{}.rs", isa.name), out_dir)?;
     }
 
     #[cfg(feature = "pulley")]

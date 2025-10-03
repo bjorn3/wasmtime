@@ -267,9 +267,9 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
 fn isa_constructor(
     triple: Triple,
     shared_flags: Flags,
-    builder: &shared_settings::Builder,
+    builder: shared_settings::Builder,
 ) -> CodegenResult<OwnedTargetIsa> {
-    let isa_flags = riscv_settings::Flags::new(&shared_flags, builder);
+    let isa_flags = riscv_settings::Flags::new(builder);
 
     // The RISC-V backend does not work without at least the G extension enabled.
     // The G extension is simply a combination of the following extensions:

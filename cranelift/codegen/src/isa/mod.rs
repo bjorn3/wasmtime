@@ -170,7 +170,7 @@ pub type Builder = IsaBuilder<OwnedTargetIsa>;
 pub struct IsaBuilder<T> {
     triple: Triple,
     setup: settings::Builder,
-    constructor: fn(Triple, settings::Flags, &settings::Builder) -> CodegenResult<T>,
+    constructor: fn(Triple, settings::Flags, settings::Builder) -> CodegenResult<T>,
 }
 
 impl<T> IsaBuilder<T> {
@@ -180,7 +180,7 @@ impl<T> IsaBuilder<T> {
     pub fn new(
         triple: Triple,
         setup: settings::Builder,
-        constructor: fn(Triple, settings::Flags, &settings::Builder) -> CodegenResult<T>,
+        constructor: fn(Triple, settings::Flags, settings::Builder) -> CodegenResult<T>,
     ) -> Self {
         IsaBuilder {
             triple,
@@ -205,8 +205,8 @@ impl<T> IsaBuilder<T> {
     /// flags are inconsistent or incompatible: for example, some
     /// platform-independent features, like general SIMD support, may
     /// need certain ISA extensions to be enabled.
-    pub fn finish(&self, shared_flags: settings::Flags) -> CodegenResult<T> {
-        (self.constructor)(self.triple.clone(), shared_flags, &self.setup)
+    pub fn finish(self, shared_flags: settings::Flags) -> CodegenResult<T> {
+        (self.constructor)(self.triple, shared_flags, self.setup)
     }
 }
 
