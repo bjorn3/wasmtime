@@ -5,6 +5,7 @@ use crate::{
     memory::{BranchProtection, JITMemoryKind, JITMemoryProvider, SystemMemoryProvider},
 };
 use cranelift_codegen::binemit::Reloc;
+use cranelift_codegen::ir::LibCall;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{ir, settings};
@@ -15,11 +16,14 @@ use cranelift_module::{
     ModuleReloc, ModuleRelocTarget, ModuleResult,
 };
 use log::info;
-use std::cell::RefCell;
+use std::cell::{RefCell, UnsafeCell};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::ffi::CString;
+use std::ffi::{CString, c_void};
 use std::io::Write;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{ptr, slice};
 use target_lexicon::{Architecture, PointerWidth};
 
 const WRITABLE_DATA_ALIGNMENT: u64 = 0x8;
@@ -78,6 +82,7 @@ impl JITBuilder {
             "false"
         };
         flag_builder.set("is_pic", is_pic).unwrap();
+        flag_builder.set("tls_model", "elf_gd").unwrap();
         let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
             panic!("host machine is not supported: {msg}");
         });
@@ -187,6 +192,7 @@ pub struct JITModule {
     declarations: ModuleDeclarations,
     compiled_functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
     compiled_data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
+    compiled_tls_objects: SecondaryMap<DataId, Option<TlsId>>,
     /// Map from a function's start address to its (end address, FuncId), used
     /// to resolve a PC back to its function for exception unwinding.
     code_ranges: BTreeMap<usize, (usize, FuncId)>,
@@ -231,6 +237,9 @@ impl JITModule {
     /// for external functions and data objects this will iterate through the
     /// registered symbol lookup functions until one matches.
     pub fn get_address(&self, name: &ModuleRelocTarget) -> *const u8 {
+        self.get_address_inner(name, false)
+    }
+    fn get_address_inner(&self, name: &ModuleRelocTarget, tls: bool) -> *const u8 {
         match name {
             ModuleRelocTarget::User { .. } => {
                 let (name, linkage) = if ModuleDeclarations::is_function(name) {
@@ -244,11 +253,18 @@ impl JITModule {
                     }
                 } else {
                     let data_id = DataId::from_name(name);
-                    match &self.compiled_data_objects[data_id] {
-                        Some(compiled) => return compiled.ptr(),
-                        None => {
-                            let decl = self.declarations.get_data_decl(data_id);
-                            (&decl.name, decl.linkage)
+                    if tls {
+                        match self.compiled_tls_objects[data_id] {
+                            Some(tls_id) => return tls_id.symbol_addr(),
+                            None => todo!(),
+                        }
+                    } else {
+                        match &self.compiled_data_objects[data_id] {
+                            Some(compiled) => return compiled.ptr(),
+                            None => {
+                                let decl = self.declarations.get_data_decl(data_id);
+                                (&decl.name, decl.linkage)
+                            }
                         }
                     }
                 };
@@ -264,6 +280,11 @@ impl JITModule {
                 }
             }
             ModuleRelocTarget::LibCall(libcall) => {
+                match *libcall {
+                    LibCall::ElfTlsGetAddr => return tls_get_addr as *const u8,
+                    LibCall::ElfTlsGetOffset => todo!(),
+                    _ => (),
+                }
                 let sym = (self.libcall_names)(*libcall);
                 self.lookup_symbol(&sym)
                     .unwrap_or_else(|| panic!("can't resolve libcall {sym}"))
@@ -271,7 +292,7 @@ impl JITModule {
             ModuleRelocTarget::FunctionOffset(func_id, offset) => {
                 match &self.compiled_functions[*func_id] {
                     Some(compiled) => return compiled.ptr().wrapping_add(*offset as usize),
-                    None => todo!(),
+                    None => unreachable!(),
                 }
             }
             name => panic!("invalid name {name:?}"),
@@ -342,16 +363,23 @@ impl JITModule {
             let func = self.compiled_functions[func]
                 .as_ref()
                 .expect("function must be compiled before it can be finalized");
-            func.perform_relocations(|name| self.get_address(name));
+            func.perform_relocations(|name, tls| self.get_address_inner(name, tls));
         }
 
         for data in std::mem::take(&mut self.data_objects_to_finalize) {
             let decl = self.declarations.get_data_decl(data);
             assert!(decl.linkage.is_definable());
-            let data = self.compiled_data_objects[data]
-                .as_ref()
-                .expect("data object must be compiled before it can be finalized");
-            data.perform_relocations(|name| self.get_address(name));
+            if decl.tls {
+                let id = self.compiled_tls_objects[data]
+                    .expect("data object must be compiled before it can be finalized");
+                TLS_TEMPLATE.lock().unwrap()[&id]
+                    .perform_relocations(|name, tls| self.get_address_inner(name, tls));
+            } else {
+                let data = self.compiled_data_objects[data]
+                    .as_ref()
+                    .expect("data object must be compiled before it can be finalized");
+                data.perform_relocations(|name, tls| self.get_address_inner(name, tls));
+            }
         }
 
         // Now that we're done patching, prepare the memory for execution!
@@ -385,6 +413,7 @@ impl JITModule {
             declarations: ModuleDeclarations::default(),
             compiled_functions: SecondaryMap::new(),
             compiled_data_objects: SecondaryMap::new(),
+            compiled_tls_objects: SecondaryMap::new(),
             code_ranges: BTreeMap::new(),
             functions_to_finalize: Vec::new(),
             data_objects_to_finalize: Vec::new(),
@@ -449,7 +478,6 @@ impl Module for JITModule {
         writable: bool,
         tls: bool,
     ) -> ModuleResult<DataId> {
-        assert!(!tls, "JIT doesn't yet support TLS");
         let (id, _linkage) = self
             .declarations
             .declare_data(name, linkage, writable, tls)?;
@@ -457,7 +485,6 @@ impl Module for JITModule {
     }
 
     fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId> {
-        assert!(!tls, "JIT doesn't yet support TLS");
         let id = self.declarations.declare_anonymous_data(writable, tls)?;
         Ok(id)
     }
@@ -588,8 +615,6 @@ impl Module for JITModule {
             ));
         }
 
-        assert!(!decl.tls, "JIT doesn't yet support TLS");
-
         let &DataDescription {
             ref init,
             function_decls: _,
@@ -620,7 +645,7 @@ impl Module for JITModule {
         };
         let relocs = data.all_relocs(pointer_reloc).collect::<Vec<_>>();
 
-        self.compiled_data_objects[id] = Some(match *init {
+        let compiled_blob = match *init {
             Init::Uninitialized => {
                 panic!("data is not initialized yet");
             }
@@ -651,7 +676,14 @@ impl Module for JITModule {
                 None,
                 kind,
             )?,
-        });
+        };
+        if decl.tls {
+            let tls_id = TlsId::new();
+            self.compiled_tls_objects[id] = Some(tls_id);
+            TLS_TEMPLATE.lock().unwrap().insert(tls_id, compiled_blob);
+        } else {
+            self.compiled_data_objects[id] = Some(compiled_blob);
+        }
 
         self.data_objects_to_finalize.push(id);
 
@@ -714,3 +746,42 @@ const _ASSERT_JIT_MODULE_IS_SEND: () = {
     const fn assert_is_send<T: Send>() {}
     assert_is_send::<JITModule>();
 };
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
+struct TlsId(usize);
+
+impl TlsId {
+    fn new() -> Self {
+        static NEXT_TLS_ID: AtomicUsize = AtomicUsize::new(0);
+        Self(NEXT_TLS_ID.fetch_add(1, Ordering::Relaxed))
+    }
+
+    fn symbol_addr(&self) -> *const u8 {
+        // Use the TLS id itself as the address to put in the TLS GOT slot for this symbol
+        ptr::without_provenance(self.0)
+    }
+}
+
+static TLS_TEMPLATE: Mutex<BTreeMap<TlsId, CompiledBlob>> = Mutex::new(BTreeMap::new());
+
+thread_local! {
+    static TLS_DATA: RefCell<BTreeMap<TlsId, UnsafeCell<Box<[u8]>>>> = RefCell::new(BTreeMap::new());
+}
+
+extern "C" fn tls_get_addr(id: &TlsId) -> *mut c_void {
+    println!("{:p} {:x?}", id, *id);
+    TLS_DATA.with_borrow_mut(|tls_data| {
+        let data: *mut Box<[u8]> = tls_data
+            .entry(*id)
+            .or_insert_with(|| {
+                let tls_template = TLS_TEMPLATE.lock().unwrap();
+                let template = &tls_template[id];
+                let template_data =
+                    unsafe { slice::from_raw_parts(template.ptr(), template.size()) };
+                UnsafeCell::new(template_data.to_vec().into_boxed_slice())
+            })
+            .get();
+        unsafe { *data.cast::<*mut [u8]>() }.cast()
+    })
+}
