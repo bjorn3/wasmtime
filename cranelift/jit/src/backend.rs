@@ -34,6 +34,7 @@ pub struct JITBuilder {
     isa: OwnedTargetIsa,
     symbols: HashMap<String, SendWrapper<*const u8>>,
     lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8> + Send>>,
+    lookup_tls_symbols: Vec<Box<dyn Fn(&str) -> Option<(usize, usize)> + Send>>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     memory: Option<Box<dyn JITMemoryProvider + Send>>,
 }
@@ -110,6 +111,7 @@ impl JITBuilder {
             isa,
             symbols,
             lookup_symbols,
+            lookup_tls_symbols: vec![],
             libcall_names,
             memory: None,
         }
@@ -163,6 +165,19 @@ impl JITBuilder {
         self
     }
 
+    /// Add a lookup fn for TLS symbols.
+    ///
+    /// Symbol lookup fn's are used to lookup the module id and offset of symbols when they couldn't
+    /// be found in the internal symbol table. Symbol lookup fn's are called in reverse of the order
+    /// in which they were added.
+    pub fn tls_symbol_lookup_fn(
+        &mut self,
+        symbol_lookup_fn: Box<dyn Fn(&str) -> Option<(usize, usize)> + Send>,
+    ) -> &mut Self {
+        self.lookup_tls_symbols.push(symbol_lookup_fn);
+        self
+    }
+
     /// Set the memory provider for the module.
     ///
     /// If unset, defaults to [`SystemMemoryProvider`].
@@ -186,7 +201,9 @@ unsafe impl<T> Send for SendWrapper<T> {}
 pub struct JITModule {
     isa: OwnedTargetIsa,
     symbols: RefCell<HashMap<String, SendWrapper<*const u8>>>,
+    tls_symbols: RefCell<HashMap<String, (usize, usize)>>,
     lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8> + Send>>,
+    lookup_tls_symbols: Vec<Box<dyn Fn(&str) -> Option<(usize, usize)> + Send>>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     memory: Box<dyn JITMemoryProvider + Send>,
     declarations: ModuleDeclarations,
@@ -230,6 +247,23 @@ impl JITModule {
         }
     }
 
+    fn lookup_tls_symbol(&self, name: &str) -> Option<(usize, usize)> {
+        match self.tls_symbols.borrow_mut().entry(name.to_owned()) {
+            std::collections::hash_map::Entry::Occupied(occ) => Some(*occ.get()),
+            std::collections::hash_map::Entry::Vacant(vac) => {
+                let res = self
+                    .lookup_tls_symbols
+                    .iter()
+                    .rev() // Try last lookup function first
+                    .find_map(|lookup| lookup(name));
+                if let Some(ptr) = res {
+                    vac.insert(ptr);
+                }
+                res
+            }
+        }
+    }
+
     /// Get the address that the given [`ModuleRelocTarget`] would resolve to.
     ///
     /// For locally defined functions and data objects this is equivalent to
@@ -243,6 +277,7 @@ impl JITModule {
         match name {
             ModuleRelocTarget::User { .. } => {
                 let (name, linkage) = if ModuleDeclarations::is_function(name) {
+                    assert!(!tls);
                     let func_id = FuncId::from_name(name);
                     match &self.compiled_functions[func_id] {
                         Some(compiled) => return compiled.ptr(),
@@ -256,22 +291,24 @@ impl JITModule {
                     if tls {
                         match self.compiled_tls_objects[data_id] {
                             Some(tls_id) => return tls_id.symbol_addr(),
-                            None => todo!(),
+                            None => {}
                         }
                     } else {
                         match &self.compiled_data_objects[data_id] {
                             Some(compiled) => return compiled.ptr(),
-                            None => {
-                                let decl = self.declarations.get_data_decl(data_id);
-                                (&decl.name, decl.linkage)
-                            }
+                            None => {}
                         }
                     }
+                    let decl = self.declarations.get_data_decl(data_id);
+                    assert_eq!(decl.tls, tls);
+                    (&decl.name, decl.linkage)
                 };
                 let name = name
                     .as_ref()
                     .expect("anonymous symbol must be defined locally");
-                if let Some(ptr) = self.lookup_symbol(name) {
+                if tls && let Some((module, offset)) = self.lookup_tls_symbol(name) {
+                    TlsId::native(module, offset).symbol_addr()
+                } else if !tls && let Some(ptr) = self.lookup_symbol(name) {
                     ptr
                 } else if linkage == Linkage::Preemptible {
                     0 as *const u8
@@ -407,7 +444,9 @@ impl JITModule {
         Self {
             isa: builder.isa,
             symbols: RefCell::new(builder.symbols),
+            tls_symbols: RefCell::new(HashMap::new()),
             lookup_symbols: builder.lookup_symbols,
+            lookup_tls_symbols: builder.lookup_tls_symbols,
             libcall_names: builder.libcall_names,
             memory,
             declarations: ModuleDeclarations::default(),
@@ -757,6 +796,12 @@ impl TlsId {
         Self(NEXT_TLS_ID.fetch_add(1, Ordering::Relaxed))
     }
 
+    fn native(module: usize, offset: usize) -> Self {
+        let id = TlsId::new();
+        TLS_NATIVE.lock().unwrap().insert(id, (module, offset));
+        id
+    }
+
     fn symbol_addr(&self) -> *const u8 {
         // Use the TLS id itself as the address to put in the TLS GOT slot for this symbol
         ptr::without_provenance(self.0)
@@ -764,13 +809,22 @@ impl TlsId {
 }
 
 static TLS_TEMPLATE: Mutex<BTreeMap<TlsId, CompiledBlob>> = Mutex::new(BTreeMap::new());
+static TLS_NATIVE: Mutex<BTreeMap<TlsId, (usize, usize)>> = Mutex::new(BTreeMap::new());
 
 thread_local! {
     static TLS_DATA: RefCell<BTreeMap<TlsId, UnsafeCell<Box<[u8]>>>> = RefCell::new(BTreeMap::new());
 }
 
-extern "C" fn tls_get_addr(id: &TlsId) -> *mut c_void {
+unsafe extern "C" fn tls_get_addr(id: &TlsId) -> *mut c_void {
     println!("{:p} {:x?}", id, *id);
+
+    if let Some(&(module, offset)) = TLS_NATIVE.lock().unwrap().get(id) {
+        unsafe extern "C" {
+            fn __tls_get_addr(p: &[usize; 2]) -> *mut c_void;
+        }
+        return unsafe { __tls_get_addr(&[module, offset]) };
+    }
+
     TLS_DATA.with_borrow_mut(|tls_data| {
         let data: *mut Box<[u8]> = tls_data
             .entry(*id)
